@@ -41,7 +41,7 @@ int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of ol
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-double THRESHOLD_PUBLISH_SENT = 0.0; //time interval [sec] after which a publish message can be sent again
+int THRESHOLD_PUBLISH_SENT = 0; //time interval [sec] after which a publish message can be sent again
 int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
 
 OdinAgent::OdinAgent()
