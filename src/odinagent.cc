@@ -41,7 +41,7 @@ int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of ol
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-int THRESHOLD_PUBLISH_SENT = 0; //time interval [sec] after which a publish message can be sent again
+uint32_t THRESHOLD_PUBLISH_SENT = 100000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
 int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
 
 OdinAgent::OdinAgent()
@@ -1631,8 +1631,15 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 				age = now - sub.last_publish_sent;
 				if (_debug_level % 10 > 1)
 					fprintf(stderr, "[Odinagent.cc]  Age: %s   Now: %s   last_publish_sent: %s\n",age.unparse().c_str(),now.unparse().c_str(), sub.last_publish_sent.unparse().c_str());
-				if (age.sec() < THRESHOLD_PUBLISH_SENT)
-					continue; // do not send the publish
+
+				// age.sec is an integer with the number of seconds
+				// age.usec is an integer with the number of microseconds
+				if (_debug_level % 10 > 1)
+					fprintf(stderr, "[Odinagent.cc]  Age: %i Threshold: %i\n", ((age.sec() * 1000000 ) + age.usec()), THRESHOLD_PUBLISH_SENT);
+
+				if (((age.sec() * 1000000 ) + age.usec() ) < THRESHOLD_PUBLISH_SENT)
+					continue; // do not send the publish message to the controller
+
 				_subscription_list.at(i-1).last_publish_sent = now; // update the timestamp
 				++count;
 				subscription_matches << subscription_matches_prev.take_string();
@@ -1650,8 +1657,14 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 						 age = now - _station_subs_table.get (src);
 						 if (_debug_level % 10 > 1)
 							 fprintf(stderr, "[Odinagent.cc]  Age: %s   Now: %s   last_publish_sent: %s\n",age.unparse().c_str(),now.unparse().c_str(), _station_subs_table.get(src).unparse().c_str());
-						 if (age.sec() < THRESHOLD_PUBLISH_SENT)
-								 continue;
+
+						// age.sec is an integer with the number of seconds
+						// age.usec is an integer with the number of microseconds
+						if (_debug_level % 10 > 1)
+							fprintf(stderr, "[Odinagent.cc]  Age: %i Threshold: %i\n", ((age.sec() * 1000000 ) + age.usec()), THRESHOLD_PUBLISH_SENT);
+
+						if (((age.sec() * 1000000 ) + age.usec() ) < THRESHOLD_PUBLISH_SENT)
+							continue; // do not send the publish message to the controller
 				   }
 				   // I add a new register in the table or/and update it if exists
 				   _station_subs_table.set (src, now);
@@ -1662,7 +1675,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 				 } 
 		  matched = 0;
 
-	}
+		}
   }
   if (count > 0) { // if there are no matches, do not send anything to the controller
 
@@ -1676,9 +1689,8 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 	WritablePacket *odin_probe_packet = Packet::make(Packet::default_headroom, payload.data(), payload.length(), 0);
 	output(3).push(odin_probe_packet);
   }
-
-
 }
+
 
 String
 OdinAgent::read_handler(Element *e, void *user_data)
