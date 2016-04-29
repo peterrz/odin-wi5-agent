@@ -110,7 +110,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _csa = false; //
   _csa_count_default = 49; // Wait (n+1) beacons before first channel switch announcement
   _csa_count = _csa_count_default; 
-  _count_csa_beacon_default = 10; // Number of beacons before channel switch
+  _count_csa_beacon_default = 4; // Number of beacons before channel switch
   _count_csa_beacon = _count_csa_beacon_default;
   if (Args(conf, this, errh)
   .read_mp("HWADDR", _hw_mac_addr)
@@ -544,8 +544,8 @@ void
 OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bool probe) {
 	if ( _csa == true && !(probe) ) { // For channel switch announcement
 	  
-		if (_debug_level % 10 > 1)
-			fprintf(stderr, "[Odinagent.cc] Sending beacon for csa\n");// For testing only
+		if (_debug_level % 10 > 0)
+			fprintf(stderr, "[Odinagent.cc] #################### Sending beacon for csa\n");// For testing only
 	  
 		/* send_beacon after channel switch */
 	  Vector<int> rates = _rtable->lookup(bssid);
@@ -1838,7 +1838,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 
       agent->_channel = channel;
 			if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] ########### Changing to channel::::::::::::::::::::::::::::::::::::" + channel);
+				fprintf(stderr, "[Odinagent.cc] ########### Changing to channel::::::::::::::::::::::::::::::::::::\n");
       std::stringstream ss;
       ss << "iw dev mon0 set channel " << channel;
       std::string str = ss.str();
@@ -2018,8 +2018,8 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       EtherAddress sta_mac;
       EtherAddress vap_bssid;
 
-			if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] #################### Setting new channel and csa ::::::::::::::");      
+      if (agent->_debug_level % 10 > 0)
+		fprintf(stderr, "[Odinagent.cc] #################### Setting new channel and csa :::::::::::::: ");      
       
       Args args = Args(agent, errh).push_back_words(str);
       if (args.read_mp("STA_MAC", sta_mac)
@@ -2043,10 +2043,14 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       
       agent->_new_channel = new_channel;//How to put the channel into new_channel?
       agent->_csa = true;
-
-      for (Vector<String>::const_iterator it = ssidList.begin();
+      
+      for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA 5 times
+    	  //if (agent->_debug_level % 10 > 0)
+    	  		//fprintf(stderr,i,"\n");
+    	  for (Vector<String>::const_iterator it = ssidList.begin();
             it != ssidList.end(); it++) {
-        agent->send_beacon (sta_mac, vap_bssid, *it, false);
+    		  agent->send_beacon (sta_mac, vap_bssid, *it, false);
+    	  }
       }
       
       break;
