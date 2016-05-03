@@ -105,7 +105,7 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms = 100;
+  _interval_ms = 10;
   _channel = 6;
   _new_channel = 1;
   _csa = false; //
