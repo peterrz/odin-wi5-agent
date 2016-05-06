@@ -105,7 +105,7 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms = 10;
+  _interval_ms = 1000;
   _channel = 6;
   _new_channel = 1;
   _csa = false; //
@@ -244,20 +244,23 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
   if (it != _packet_buffer.end()) {
     OdinStationState oss = _sta_mapping_table.get (sta_mac);
 
-    if (it.value() == "") {
-      for (int i = 0; i < oss._vap_ssids.size(); i++) {
-        send_beacon(sta_mac, oss._vap_bssid, oss._vap_ssids[i], true);
-      }
+    for (int j = 1; j <= 5; j++) { // Send 5 beacons, help in the case of a channel switch
+    
+    	if (it.value() == "") {
+    		for (int i = 0; i < oss._vap_ssids.size(); i++) {
+    			send_beacon(sta_mac, oss._vap_bssid, oss._vap_ssids[i], true);
+    		}
+    	}
+    	else {
+    		for (int i = 0; i < oss._vap_ssids.size(); i++) {
+    			if (oss._vap_ssids[i] == it.value()) {
+    				send_beacon(sta_mac, oss._vap_bssid, it.value(), true);
+    				break;
+    			}
+    		}
+    	}
+    
     }
-    else {
-      for (int i = 0; i < oss._vap_ssids.size(); i++) {
-        if (oss._vap_ssids[i] == it.value()) {
-          send_beacon(sta_mac, oss._vap_bssid, it.value(), true);
-          break;
-        }
-      }
-    }
-
     _packet_buffer.erase(it.key());
   }
 
