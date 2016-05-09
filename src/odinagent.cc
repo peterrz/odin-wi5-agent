@@ -1886,9 +1886,9 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 
       agent->_channel = channel;
 			if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] ########### Changing to channel::::::::::::::::::::::::::::::::::::\n");
+				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
       std::stringstream ss;
-      ss << "iw dev mon0 set channel " << channel;
+      ss << "hostapd_cli chan_switch " << _count_csa_beacon_default << " " << channel;
       std::string str = ss.str();
       char *cstr = new char[str.length() + 1];
       strcpy(cstr, str.c_str());
