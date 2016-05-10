@@ -55,7 +55,7 @@ NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in m
 TAP_INTERFACE_NAME = "ap"			# name of the TAP device that Click will create in the 
 STA_IP = "192.168.1.11"				# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
 STA_MAC = "74:F0:6D:20:D4:74"		# MAC address of the STA in the LVAP tuple. It only works for a single client without DHCP
-RATE = "108"						# e.g. if it is 108, this means 108*500kbps = 54Mbps
+RATE = "12"						# e.g. if it is 108, this means 108*500kbps = 54Mbps
 
 print '''
 // This is the scheme:
@@ -103,7 +103,7 @@ TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 print '''
 // output 3 of odinagent goes to odinsocket
 odinagent[3] -> odinsocket
-rates :: AvailableRates(DEFAULT 24 36 48 108);	// wifi rates in multiples of 500kbps
+rates :: AvailableRates(DEFAULT 12 18 24 36 48 72 96 108 );	// wifi rates in multiples of 500kbps
 control :: ControlSocket("TCP", 6777);
 chatter :: ChatterSocket("TCP", 6778);
 '''
