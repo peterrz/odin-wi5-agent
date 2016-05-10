@@ -109,7 +109,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _channel = 6;
   _new_channel = 1;
   _csa = false; //
-  _csa_count_default = 49; // Wait (n+1) beacons before first channel switch announcement
+  _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
   _csa_count = _csa_count_default; 
   _count_csa_beacon_default = 4; // Number of beacons before channel switch
   _count_csa_beacon = _count_csa_beacon_default;
@@ -2067,7 +2067,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       EtherAddress vap_bssid;
 
       if (agent->_debug_level % 10 > 0)
-		fprintf(stderr, "[Odinagent.cc] #################### Setting new channel and csa :::::::::::::: ");      
+		fprintf(stderr, "[Odinagent.cc] #################### Setting csa new and new channel %i\n", new_channel);      
       
       Args args = Args(agent, errh).push_back_words(str);
       if (args.read_mp("STA_MAC", sta_mac)
