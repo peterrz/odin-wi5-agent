@@ -55,6 +55,11 @@ ovs-vswitchd tcp:$MYIP:$TCP_PORT_OVS --pidfile=ovs-vswitchd.pid --overwrite-pidf
  
 # Create the bridge and pass in some configuration options
 $VSCTL add-br $SW
+
+# In OpenWrt 15.05 the bridge is created down
+ifconfig $SW up
+
+#optional: define the version of OpenFlow to be used
 #$VSCTL set bridge $SW protocols=OpenFlow10
  
 #Configure the switch to have an OpenFlow Controller.  This will contact the controller.
