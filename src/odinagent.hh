@@ -130,6 +130,7 @@ public:
     handler_update_signal_strength,
     handler_signal_strength_offset,
     handler_channel_switch_announcement,
+	handler_scan_client,
   };
 
   // Rx-stats about stations

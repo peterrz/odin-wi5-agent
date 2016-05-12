@@ -1694,6 +1694,12 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
   }
 }
 
+/*
+ * We have include new handlers an modified others
+ *
+ * @author Luis Sequeira <sequeira@unizar.es>
+ *
+ * */
 
 String
 OdinAgent::read_handler(Element *e, void *user_data)
@@ -1779,6 +1785,11 @@ OdinAgent::read_handler(Element *e, void *user_data)
       sa << agent->_mean <<  " " <<  agent->_num_mean << " " << variance << "\n";
       break;
     }
+    case handler_scan_client: {
+          sa << agent->_channel << "\n";
+          fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan file \n");
+          break;
+        }
   }
 
   return sa.take_string();
@@ -2103,6 +2114,27 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       
       break;
     }   
+    case handler_scan_client: { // need testing
+    	EtherAddress sta_mac;
+        int channel;
+        if (Args(agent, errh).push_back_words(str)
+          .read_mp("STA_MAC", sta_mac)
+		  .read_mp("CHANNEL", channel)
+          .complete() < 0)
+        {
+          return -1;
+        }
+		if (agent->_debug_level % 10 > 0)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
+        std::stringstream ss;
+        ss << "sh scan.sh " << sta_mac << " " << channel; // scan.sh hasn't been deployed yet
+        std::string str = ss.str();
+        char *cstr = new char[str.length() + 1];
+        strcpy(cstr, str.c_str());
+        system(cstr);
+        fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
+        break;
+    }
   }
   return 0;
 }
@@ -2118,6 +2150,7 @@ OdinAgent::add_handlers()
   add_read_handler("subscriptions", read_handler, handler_subscriptions);
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
+  add_read_handler("scan_client", read_handler, handler_scan_client);
 
   add_write_handler("add_vap", write_handler, handler_add_vap);
   add_write_handler("set_vap", write_handler, handler_set_vap);
@@ -2131,6 +2164,7 @@ OdinAgent::add_handlers()
   add_write_handler("handler_update_signal_strength", write_handler, handler_update_signal_strength);
   add_write_handler("signal_strength_offset", write_handler, handler_signal_strength_offset);
   add_write_handler("channel_switch_announcement", write_handler, handler_channel_switch_announcement);
+  add_write_handler("scan_client", write_handler, handler_scan_client);
 }
 
 /* This debug function prints info about clients */
