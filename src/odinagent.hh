@@ -173,6 +173,9 @@ public:
   int _count_csa_beacon_default; // Default number of beacons before channel switch
   int _csa_count; // For _csa FALSE-->TRUE
   int _csa_count_default;
+  bool _active_scanning; // To active scanning
+  EtherAddress _scanned_sta_mac; // MAC to scan
+  int _scanning_result; // Result for scanning
   Vector<Subscription> _subscription_list;
   //bool _debug;
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed

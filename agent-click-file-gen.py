@@ -175,6 +175,21 @@ from_dev :: FromDevice(%s0, HEADROOM 50)
   -> [0]odinagent
 ''' % ( NETWORK_INTERFACE_NAMES )
 
+
+print '''
+// ----------------Packets coming up (from the STA to the AP) go to the input 0 of the Odin Agent
+from_dev1 :: FromDevice(%s1, HEADROOM 50)
+  -> RadiotapDecap()
+  -> ExtraDecap()
+  -> phyerr_filter1 :: FilterPhyErr()
+  -> tx_filter1 :: FilterTX()
+  -> dupe1 :: WifiDupeFilter()	// Filters out duplicate 802.11 packets based on their sequence number
+								// click/elements/wifi/wifidupefilter.hh
+  -> [2]odinagent
+''' % ( NETWORK_INTERFACE_NAMES )
+
+
+
 print '''
 odinagent[0]
   -> q
