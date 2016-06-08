@@ -1870,12 +1870,10 @@ OdinAgent::read_handler(Element *e, void *user_data)
       break;
     }
     case handler_scan_client: {
-    	  //sa << agent->_channel << "\n";
           // Scanning result
     	  sa << agent->_scanning_result << "\n";
           fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan file \n");
-    	  // Disable scanning
-    	  agent->_active_scanning = false;
+    	  agent->_active_scanning = false;// Disable scanning
           break;
         }
   }
@@ -2204,6 +2202,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     }   
     case handler_scan_client: { // need testing
     	EtherAddress sta_mac;
+    	std::stringstream ss;
     	int channel;
     	if (Args(agent, errh).push_back_words(str)
     	    .read_mp("STA_MAC", sta_mac)
@@ -2215,8 +2214,6 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
     	// Set channel to scan
-    	std::stringstream ss;
-    	//ss << "sh scan.sh " << sta_mac << " " << channel; // scan.sh hasn't been deployed yet
     	ss << "iw dev mon1 set channel " << channel; 
     	std::string str = ss.str();
     	char *cstr = new char[str.length() + 1];
