@@ -1320,7 +1320,7 @@ OdinAgent::update_tx_stats(Packet *p)
   //stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
   stat._avg_signal = 0;
 	stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)) // time in seconds
+  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)); // time in seconds
 
   stat._last_received.assign_now();
 /*
@@ -1332,7 +1332,7 @@ OdinAgent::update_tx_stats(Packet *p)
   }
 */
 
-  _tx_stats.set (src, stat);
+  _tx_stats.set (dst, stat);
 }
 
 
@@ -1362,7 +1362,7 @@ OdinAgent::update_rx_stats(Packet *p)
   stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
   stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
   stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)) // time in seconds
+  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)); // time in seconds
 
   stat._last_received.assign_now();
 /*
@@ -1778,7 +1778,7 @@ OdinAgent::read_handler(Element *e, void *user_data)
       break;
     }
 		    case handler_txstat: {
-      Timestamp now = Timestamp::now();
+      //Timestamp now = Timestamp::now();
 	  Vector<EtherAddress> buf;
 
 			// the controller will get the tx statistics of all the STAs associated to this AP
@@ -1797,8 +1797,8 @@ OdinAgent::read_handler(Element *e, void *user_data)
         sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
         sa << " air_time:" << n._air_time; // time in seconds
 
-		sa << " first_received:" << n.first_received; // time in long format
-		sa << " last_received:" << n.last_received << "\n"; // time in long format
+		sa << " first_received:" << n._first_received; // time in long format
+		sa << " last_received:" << n._last_received << "\n"; // time in long format
 		
         // sa << " age:" << age << "\n";
 		buf.push_back (iter.key());
@@ -1810,7 +1810,7 @@ OdinAgent::read_handler(Element *e, void *user_data)
 	  break;
     }
     case handler_rxstat: {
-      Timestamp now = Timestamp::now();
+      //Timestamp now = Timestamp::now();
 	  Vector<EtherAddress> buf;
 
 			// the controller will get the rx statistics of all the STAs associated to this AP
@@ -1829,8 +1829,8 @@ OdinAgent::read_handler(Element *e, void *user_data)
         sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
         sa << " air_time:" << n._air_time; // time in seconds
 
-		sa << " first_received:" << n.first_received; // time in long format
-		sa << " last_received:" << n.last_received << "\n"; // time in long format
+		sa << " first_received:" << n._first_received; // time in long format
+		sa << " last_received:" << n._last_received << "\n"; // time in long format
 		
         // sa << " age:" << age << "\n";
 		buf.push_back (iter.key());
@@ -2222,8 +2222,8 @@ OdinAgent::add_handlers()
 void
 OdinAgent::print_stations_state()
 {
-	if (_debug_level % 10 > 0) {
-		if (_debug_level / 10 == 1)
+	if (_debug_level % 10 > 0) {    // debug is activated
+		if (_debug_level / 10 == 1)		// I am in demo mode
 			fprintf(stderr, "##################################################################\n");
 
 		fprintf(stderr,"[Odinagent.cc] ##### Periodic report. Number of stations associated: %i\n", _sta_mapping_table.size());
@@ -2245,7 +2245,7 @@ OdinAgent::print_stations_state()
 
 				//stats
 				//Print info from our stations if available
-				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _tx_stats.find(it.key());
+				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_tx = _tx_stats.find(it.key());
 				if (iter_tx != _tx_stats.end()) { 
 					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_tx.value()._rate,iter_tx.value()._rate * 500 );
 					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_tx.value()._noise));

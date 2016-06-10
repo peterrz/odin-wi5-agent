@@ -13,7 +13,7 @@
 
 import sys
 
-if (len(sys.argv) != 11):
+if (len(sys.argv) != 12):
     print 'Usage:'
     print ''
     print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE>' %(sys.argv[0])
@@ -28,8 +28,8 @@ if (len(sys.argv) != 11):
     print 'SSIDAGENT is the name of the SSID of this Odin agent'
     print 'ODIN_AGENT_IP is the IP address of the AP where this script is running (the IP used for communicating with the controller)'
     print 'DEBUG_CLICK: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed'
-    print 'DEBUG_ODIN: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed'
-		print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
+    print 'DEBUG_ODIN: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "11" or "12": demo info displayed'
+    print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
     print ''
     print 'Example:'
     print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L M N > agent.click' %(sys.argv[0])
