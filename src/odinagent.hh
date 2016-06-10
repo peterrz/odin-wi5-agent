@@ -147,8 +147,8 @@ public:
 		double _avg_len_pkt;	//average length of the packets
 		double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
 
-		Timestamp _first_received;	//timestamp of the first packet included in the statistics
-    Timestamp _last_received;		//timestamp of the last packet included in the statistics
+		Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
+    Timestamp _time_last_packet;		//timestamp of the last packet included in the statistics
 
     StationStats() {
       memset(this, 0, sizeof(*this));
