@@ -105,7 +105,7 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms = 1000;
+  _interval_ms = 50;
   _channel = 6;
   _new_channel = 1;
   _csa = false; //
@@ -2214,7 +2214,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
     	// Set channel to scan
-    	ss << "iw dev mon1 set channel " << channel; 
+    	ss << "iw dev wlan1 set channel " << channel; 
     	std::string str = ss.str();
     	char *cstr = new char[str.length() + 1];
     	strcpy(cstr, str.c_str());
