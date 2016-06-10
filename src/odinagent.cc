@@ -55,7 +55,8 @@ OdinAgent::OdinAgent()
   _associd(0),
   _beacon_timer(this),
   _debugfs_string(""),
-  _ssid_agent_string("")
+  _ssid_agent_string(""),
+	_tx_rate(0)
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -121,6 +122,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("DEBUGFS", _debugfs_string)
   .read_m("SSIDAGENT", _ssid_agent_string)
   .read_m("DEBUG_ODIN", _debug_level)
+	.read_m("TX_RATE", _tx_rate)
   .complete() < 0)
   return -1;
 
@@ -1286,6 +1288,55 @@ OdinAgent::wifi_encap (Packet *p, EtherAddress bssid)
 }
 
 void
+OdinAgent::update_tx_stats(Packet *p)
+{
+  struct click_wifi *w = (struct click_wifi *) p->data();
+  EtherAddress dst = EtherAddress(w->i_addr3); 			// Get the destination address
+
+  //struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+
+  StationStats stat;
+  HashTable<EtherAddress, StationStats>::const_iterator it = _tx_stats.find(dst);
+  if (it == _tx_stats.end()) {
+    stat = StationStats();
+	stat._first_received.assign_now();
+  }
+  else
+    stat = it.value();
+
+	// the rate is read from the Click configuration file
+  //stat._rate = ceh->rate;
+	stat._rate = _tx_rate;
+	// we are not currently modifying per-packet transmission power
+	//so calculating the average makes no sense
+  //stat._signal = ceh->rssi + _signal_offset;
+	stat._signal = 0;
+  //stat._noise = ceh->silence;
+  stat._noise = 0;
+	stat._len_pkt = p->length();
+  
+  stat._packets++; // number of packets
+  stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
+  //stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
+  stat._avg_signal = 0;
+	stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
+  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)) // time in seconds
+
+  stat._last_received.assign_now();
+/*
+  if (_debug_level % 10 > 1){
+        FILE * fp;
+        fp = fopen ("/root/spring/shared/updated_stats.txt", "w");
+        fprintf(fp, "* update_rx_stats: src = %s, rate = %i, noise = %i, signal = %i (%i dBm)\n", src.unparse_colon().c_str(), stat._rate, stat._noise, stat._signal, (stat._signal - 128)*-1); //-(value - 128)
+        fclose(fp);
+  }
+*/
+
+  _tx_stats.set (src, stat);
+}
+
+
+void
 OdinAgent::update_rx_stats(Packet *p)
 {
   struct click_wifi *w = (struct click_wifi *) p->data();
@@ -1295,15 +1346,24 @@ OdinAgent::update_rx_stats(Packet *p)
 
   StationStats stat;
   HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
-  if (it == _rx_stats.end())
+  if (it == _rx_stats.end()) {
     stat = StationStats();
+	stat._first_received.assign_now();
+  }
   else
     stat = it.value();
 
   stat._rate = ceh->rate;
-  stat._noise = ceh->silence;
   stat._signal = ceh->rssi + _signal_offset;
-  stat._packets++;
+  stat._noise = ceh->silence;
+  stat._len_pkt = p->length();
+  
+  stat._packets++; // number of packets
+  stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
+  stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
+  stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
+  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)) // time in seconds
+
   stat._last_received.assign_now();
 /*
   if (_debug_level % 10 > 1){
@@ -1358,22 +1418,8 @@ OdinAgent::push(int port, Packet *p)
     struct click_wifi *w = (struct click_wifi *) p->data();
 
     EtherAddress src = EtherAddress(w->i_addr2);
-    // struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
 
-    // StationStats stat;
-    // HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
-    // if (it == _rx_stats.end())
-    //   stat = StationStats();
-    // else
-    //   stat = it.value();
-
-    // stat._rate = ceh->rate;
-    // stat._noise = ceh->silence;
-    // stat._signal = ceh->rssi + _signal_offset;
-    // stat._packets++;
-    // stat._last_received.assign_now();
-
-    // _rx_stats.set (src, stat);
+		// Update Rx statistics
     update_rx_stats(p);
 
     type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
@@ -1454,6 +1500,9 @@ OdinAgent::push(int port, Packet *p)
 				memcpy(w_out->i_addr2, oss._vap_bssid.data(), 6);
 				memcpy(w_out->i_addr3, src.data(), 6);
 
+				// Update Tx statistics
+				update_tx_stats(p_out);
+
 				// send the frame by the output number 2
 				output(2).push(p_out);
 				return;
@@ -1494,7 +1543,12 @@ OdinAgent::push(int port, Packet *p)
       //      memcpy(ea->arp_sha, oss._vap_bssid.data(), 6);
       //  }
       //}
+
+	  // Add wifi header
 	  Packet *p_out = wifi_encap (p, oss._vap_bssid);
+	  
+	  // Update Tx statistics
+	  update_tx_stats(p_out);
       output(2).push(p_out);
       return;
     }
@@ -1723,33 +1777,70 @@ OdinAgent::read_handler(Element *e, void *user_data)
       sa << agent->_interval_ms << "\n";
       break;
     }
+		    case handler_txstat: {
+      Timestamp now = Timestamp::now();
+	  Vector<EtherAddress> buf;
+
+			// the controller will get the tx statistics of all the STAs associated to this AP
+			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
+      for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
+           iter.live(); iter++) {
+
+        OdinAgent::StationStats n = iter.value();
+        //Timestamp age = now - n._last_received;
+
+        sa << iter.key().unparse_colon();
+        
+		sa << " packets:" << n._packets;
+		sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+        sa << " avg_signal:" << n._avg_signal; // signal in dBm
+        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+        sa << " air_time:" << n._air_time; // time in seconds
+
+		sa << " first_received:" << n.first_received; // time in long format
+		sa << " last_received:" << n.last_received << "\n"; // time in long format
+		
+        // sa << " age:" << age << "\n";
+		buf.push_back (iter.key());
+      }	
+	  
+	  for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
+		 agent->_tx_stats.erase (*iter);
+      
+	  break;
+    }
     case handler_rxstat: {
       Timestamp now = Timestamp::now();
+	  Vector<EtherAddress> buf;
 
+			// the controller will get the rx statistics of all the STAs associated to this AP
+			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
       for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_rx_stats.begin();
            iter.live(); iter++) {
 
         OdinAgent::StationStats n = iter.value();
-        Timestamp age = now - n._last_received;
-        // Timestamp avg_signal;
-        // Timestamp avg_noise;
-        // if (n._packets) {
-        //   avg_signal = Timestamp::make_msec(1000*n._sum_signal / n._packets);
-        //   avg_noise = Timestamp::make_msec(1000*n._sum_noise / n._packets);
-        // }
-        sa << iter.key().unparse_colon();
-        sa << " rate:" << n._rate;
-        sa << " signal:" << n._signal;
-        sa << " noise:" << n._noise;
-        // sa << " avg_signal " << avg_signal;
-        // sa << " avg_noise " << avg_noise;
-        // sa << " total_signal " << n._sum_signal;
-        // sa << " total_noise " << n._sum_noise;
-        sa << " packets:" << n._packets;
-        sa << " last_received:" << age << "\n";
-      }
+        //Timestamp age = now - n._last_received;
 
-      break;
+        sa << iter.key().unparse_colon();
+        
+		sa << " packets:" << n._packets;
+		sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+        sa << " avg_signal:" << n._avg_signal; // signal in dBm
+        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+        sa << " air_time:" << n._air_time; // time in seconds
+
+		sa << " first_received:" << n.first_received; // time in long format
+		sa << " last_received:" << n.last_received << "\n"; // time in long format
+		
+        // sa << " age:" << age << "\n";
+		buf.push_back (iter.key());
+      }	
+	  
+		// as I have sent the statistics, I delete the records of all the MACs read
+	  for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
+		 agent->_rx_stats.erase (*iter);
+      
+	  break;
     }
     case handler_subscriptions: {
 
@@ -2108,6 +2199,7 @@ OdinAgent::add_handlers()
   add_read_handler("channel", read_handler, handler_channel);
   add_read_handler("interval", read_handler, handler_interval);
   add_read_handler("rxstats", read_handler, handler_rxstat);
+	add_read_handler("txstats", read_handler, handler_txstat);
   add_read_handler("subscriptions", read_handler, handler_subscriptions);
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
@@ -2139,7 +2231,8 @@ OdinAgent::print_stations_state()
 		if(_sta_mapping_table.size() != 0) {
 
 			// Initialize the statistics
-			HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = _rx_stats.begin();
+			HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_tx = _tx_stats.begin();
+			HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _rx_stats.begin();
 			
 			// For each VAP
 			for (HashTable<EtherAddress, OdinStationState>::iterator it	= _sta_mapping_table.begin(); it.live(); it++) {
@@ -2152,13 +2245,41 @@ OdinAgent::print_stations_state()
 
 				//stats
 				//Print info from our stations if available
-				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = _rx_stats.find(it.key());
-				if (iter != _rx_stats.end()){
-					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter.value()._rate,iter.value()._rate * 500 );
-					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter.value()._noise));
-					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter.value()._signal, iter.value()._signal - 256 ); // value - 256)
-					fprintf(stderr,"[Odinagent.cc]                -> packets: %i\n", (iter.value()._packets));
-					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter.value()._last_received).sec(), (iter.value()._last_received).subsec());
+				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _tx_stats.find(it.key());
+				if (iter_tx != _tx_stats.end()) { 
+					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_tx.value()._rate,iter_tx.value()._rate * 500 );
+					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_tx.value()._noise));
+					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_tx.value()._signal, iter_tx.value()._signal - 256 ); // value - 256)
+					fprintf(stderr,"[Odinagent.cc]                -> len_pkt: %i bytes\n", iter_tx.value()._len_pkt); 
+
+					fprintf(stderr,"[Odinagent.cc]                -> packets: %i\n", iter_tx.value()._packets);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_rate: %f Kbps\n", iter_tx.value()._avg_rate);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_signal: %f dBm\n", iter_tx.value()._avg_signal);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_len_pkt: %f bytes\n", iter_tx.value()._avg_len_pkt);
+					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f seconds\n", iter_tx.value()._air_time);
+					
+					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_tx.value()._first_received).sec(), (iter_tx.value()._first_received).subsec());
+					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_tx.value()._last_received).sec(), (iter_tx.value()._last_received).subsec());
+					
+					fprintf(stderr,"[Odinagent.cc]\n");
+				}
+
+				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _rx_stats.find(it.key());
+				if (iter_rx != _rx_stats.end()) { 
+					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_rx.value()._rate,iter_rx.value()._rate * 500 );
+					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_rx.value()._noise));
+					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_rx.value()._signal, iter_rx.value()._signal - 256 ); // value - 256)
+					fprintf(stderr,"[Odinagent.cc]                -> len_pkt: %i bytes\n", iter_rx.value()._len_pkt); 
+
+					fprintf(stderr,"[Odinagent.cc]                -> packets: %i\n", iter_rx.value()._packets);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_rate: %f Kbps\n", iter_rx.value()._avg_rate);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_signal: %f dBm\n", iter_rx.value()._avg_signal);
+					fprintf(stderr,"[Odinagent.cc]                -> avg_len_pkt: %f bytes\n", iter_rx.value()._avg_len_pkt);
+					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f seconds\n", iter_rx.value()._air_time);
+					
+					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_rx.value()._first_received).sec(), (iter_rx.value()._first_received).subsec());
+					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_rx.value()._last_received).sec(), (iter_rx.value()._last_received).subsec());
+					
 					fprintf(stderr,"[Odinagent.cc]\n");
 				}
 			}

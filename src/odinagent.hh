@@ -118,6 +118,7 @@ public:
     handler_num_slots,
     handler_add_vap,
     handler_set_vap,
+		handler_txstat,
     handler_rxstat,
     handler_remove_vap,
     handler_channel,
@@ -132,15 +133,22 @@ public:
     handler_channel_switch_announcement,
   };
 
-  // Rx-stats about stations
+  // Tx and Rx-stats about stations
   class StationStats {
   public:
     int _rate;
     int _noise;
     int _signal;
+		int _len_pkt;
 
-    int _packets;
-    Timestamp _last_received;
+		int _packets;					//number of packets
+		double _avg_signal;		//average value of the signal
+		double _avg_rate;			//average rate of the packets
+		double _avg_len_pkt;	//average length of the packets
+		double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
+
+		Timestamp _first_received;	//timestamp of the first packet included in the statistics
+    Timestamp _last_received;		//timestamp of the last packet included in the statistics
 
     StationStats() {
       memset(this, 0, sizeof(*this));
@@ -159,9 +167,13 @@ public:
   double _m2; // for estimated variance
   int _signal_offset;
 
-  // Keep track of rx-statistics of stations from which
-  // we hear frames. Only keeping track of data frames for
+	// Keep track of tx-statistics of stations from which
+  // we send frames. Only keeping track of data frames for
   // now.
+  HashTable<EtherAddress, StationStats> _tx_stats;
+
+  // Keep track of rx-statistics of stations from which
+  // we hear frames.
   HashTable<EtherAddress, StationStats> _rx_stats;
 
   int _interval_ms; // Beacon interval: common between all VAPs for now
@@ -180,6 +192,7 @@ public:
 
 private:
   void compute_bssid_mask ();
+	void update_tx_stats(Packet *p);
   void update_rx_stats(Packet *p);
   EtherAddress _hw_mac_addr;
   class AvailableRates *_rtable;

@@ -16,7 +16,7 @@ import sys
 if (len(sys.argv) != 11):
     print 'Usage:'
     print ''
-    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN>' %(sys.argv[0])
+    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE>' %(sys.argv[0])
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
@@ -29,9 +29,10 @@ if (len(sys.argv) != 11):
     print 'ODIN_AGENT_IP is the IP address of the AP where this script is running (the IP used for communicating with the controller)'
     print 'DEBUG_CLICK: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed'
     print 'DEBUG_ODIN: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed'
+		print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
     print ''
     print 'Example:'
-    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L M > agent.click' %(sys.argv[0])
+    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L M N > agent.click' %(sys.argv[0])
     print ''
     print 'and then run the .click file you have generated'
     print 'click$ ./bin/click agent.click'
@@ -49,13 +50,13 @@ DEFAULT_GW = sys.argv[8]			#the IP address of the Access Point.
 AP_UNIQUE_IP = sys.argv[8]			# IP address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
 DEBUG_CLICK = int(sys.argv[9])
 DEBUG_ODIN = int(sys.argv[10])
+RATE = int(sys.argv[11])
 
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in monitor mode. e.g. mon
 TAP_INTERFACE_NAME = "ap"			# name of the TAP device that Click will create in the 
 STA_IP = "192.168.1.11"				# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
 STA_MAC = "74:F0:6D:20:D4:74"		# MAC address of the STA in the LVAP tuple. It only works for a single client without DHCP
-RATE = "108"						# e.g. if it is 108, this means 108*500kbps = 54Mbps
 
 print '''
 // This is the scheme:
