@@ -1401,7 +1401,7 @@ OdinAgent::update_rx_stats(Packet *p)
   else 
     avg_signal_mW  = pow (10, stat._avg_signal / 10);
   avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/stat._packets);
-  stat._avg_signal = 10 log10 (avg_signal_mW); // signal in dBm
+  stat._avg_signal = 10 * log10 (avg_signal_mW); // signal in dBm
   
   stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
   stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)); // time used by this packet (in seconds)
