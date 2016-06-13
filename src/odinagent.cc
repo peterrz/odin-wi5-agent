@@ -30,6 +30,7 @@
 #include <sstream>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 CLICK_DECLS
 
@@ -1368,6 +1369,7 @@ OdinAgent::update_rx_stats(Packet *p)
   struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
 
   StationStats stat;
+  bool first_packet = false; // it will be true if the packet is the first one used for the average
   HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
 
 	// if the station does not have a statistics variable, create it
@@ -1375,6 +1377,7 @@ OdinAgent::update_rx_stats(Packet *p)
     stat = StationStats();
 
 	stat._time_first_packet.assign_now();	// update the value of the first received packet
+	first_packet = true;
   }
   else
     stat = it.value();
@@ -1388,7 +1391,18 @@ OdinAgent::update_rx_stats(Packet *p)
 
 	// Calculate the averaged statistics
   stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
-  stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
+
+  // Calculate the value of the signal, converting from dBm to mW and back
+  double signal_mW;
+  double avg_signal_mW;
+  signal_mW = pow (10, (stat._signal - 256) / 10);
+  if first_packet	// if this is the first packet, the previous average will be 0
+    avg_signal_mW  = 0;
+  else 
+    avg_signal_mW  = pow (10, stat._avg_signal / 10);
+  avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/stat._packets);
+  stat._avg_signal = 10 log10 (avg_signal_mW); // signal in dBm
+  
   stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
   stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500000)); // time used by this packet (in seconds)
 
