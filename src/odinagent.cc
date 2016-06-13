@@ -1396,7 +1396,7 @@ OdinAgent::update_rx_stats(Packet *p)
   double signal_mW;
   double avg_signal_mW;
   signal_mW = pow (10, (stat._signal - 256) / 10);
-  if first_packet	// if this is the first packet, the previous average will be 0
+  if (first_packet)	// if this is the first packet, the previous average will be 0
     avg_signal_mW  = 0;
   else 
     avg_signal_mW  = pow (10, stat._avg_signal / 10);
