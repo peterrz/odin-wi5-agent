@@ -2298,6 +2298,7 @@ OdinAgent::print_stations_state()
 				//Print info from our stations if available
 				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_tx = _tx_stats.find(it.key());
 				if (iter_tx != _tx_stats.end()) { 
+					fprintf(stderr,"[Odinagent.cc]          Downlink (transmission)\n");
 					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_tx.value()._rate,iter_tx.value()._rate * 500 );
 					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_tx.value()._noise));
 					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_tx.value()._signal, iter_tx.value()._signal - 256 ); // value - 256)
@@ -2317,6 +2318,7 @@ OdinAgent::print_stations_state()
 
 				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _rx_stats.find(it.key());
 				if (iter_rx != _rx_stats.end()) { 
+					fprintf(stderr,"[Odinagent.cc]          Uplink (reception)\n");
 					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_rx.value()._rate,iter_rx.value()._rate * 500 );
 					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_rx.value()._noise));
 					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_rx.value()._signal, iter_rx.value()._signal - 256 ); // value - 256)
