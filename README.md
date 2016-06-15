@@ -25,7 +25,7 @@ to generate the appropriate Odin agent click file.
 
 This is an example of how to use the python command:
 
-    $ python agent-click-file-gen.py 4 50  14:CC:20:AC:72:91 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.7 0 12 108
+    $ python agent-click-file-gen.py 4 50  14:CC:20:AC:72:91 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.7 0 11 12
 
 where the parameters have the next meaning:
 
@@ -47,6 +47,6 @@ where the parameters have the next meaning:
 
 `0`			No click debug info
 
-`12`			Debug level 2, with Demo appearance (1)
+`11`			Debug level 1, with Demo appearance (1)
 
-`108`			54 Mbps of TX rate
+`12`			6 Mbps of TX rate
