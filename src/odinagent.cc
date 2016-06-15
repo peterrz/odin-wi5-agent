@@ -1338,7 +1338,7 @@ OdinAgent::update_tx_stats(Packet *p)
   //stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
   stat._avg_signal = 0;	// we are not currently modifying per-packet transmission power so calculating the average makes no sense
 	stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + (double)((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
+  stat._air_time = stat._air_time + ((double)(8*stat._len_pkt) / (double)(stat._rate*500)); // time used by this packet (in ms)
 
 	// store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
@@ -1404,7 +1404,7 @@ OdinAgent::update_rx_stats(Packet *p)
   stat._avg_signal = 10 * log10 (avg_signal_mW); // signal in dBm
   
   stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + (double)((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
+  stat._air_time = stat._air_time + ((double)(8*stat._len_pkt) / (double)(stat._rate*500)); // time used by this packet (in ms)
 
 	// store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
