@@ -1338,7 +1338,7 @@ OdinAgent::update_tx_stats(Packet *p)
   //stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
   stat._avg_signal = 0;	// we are not currently modifying per-packet transmission power so calculating the average makes no sense
 	stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
+  stat._air_time = stat._air_time + (double)((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
 
 	// store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
@@ -1404,7 +1404,7 @@ OdinAgent::update_rx_stats(Packet *p)
   stat._avg_signal = 10 * log10 (avg_signal_mW); // signal in dBm
   
   stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
-  stat._air_time = stat._air_time + ((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
+  stat._air_time = stat._air_time + (double)((8*stat._len_pkt)/(stat._rate*500)); // time used by this packet (in ms)
 
 	// store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
@@ -2299,16 +2299,16 @@ OdinAgent::print_stations_state()
 				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_tx = _tx_stats.find(it.key());
 				if (iter_tx != _tx_stats.end()) { 
 					fprintf(stderr,"[Odinagent.cc]          Downlink (transmission)\n");
-					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_tx.value()._rate,iter_tx.value()._rate * 500 );
-					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_tx.value()._noise));
-					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_tx.value()._signal, iter_tx.value()._signal - 256 ); // value - 256)
-					fprintf(stderr,"[Odinagent.cc]                -> len_pkt: %i bytes\n", iter_tx.value()._len_pkt); 
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_rate: %i (%i kbps)\n", iter_tx.value()._rate,iter_tx.value()._rate * 500 );
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_noise: %i\n", (iter_tx.value()._noise));
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_signal: %i (%i dBm)\n", iter_tx.value()._signal, iter_tx.value()._signal - 256 ); // value - 256)
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_length: %i bytes\n", iter_tx.value()._len_pkt); 
 
-					fprintf(stderr,"[Odinagent.cc]                -> packets: %i\n", iter_tx.value()._packets);
+					fprintf(stderr,"[Odinagent.cc]                -> total packets: %i\n", iter_tx.value()._packets);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_rate: %f Kbps\n", iter_tx.value()._avg_rate);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_signal: %f dBm\n", iter_tx.value()._avg_signal);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_len_pkt: %f bytes\n", iter_tx.value()._avg_len_pkt);
-					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f seconds\n", iter_tx.value()._air_time);
+					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f ms\n", iter_tx.value()._air_time);
 					
 					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_tx.value()._time_first_packet).sec(), (iter_tx.value()._time_first_packet).subsec());
 					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_tx.value()._time_last_packet).sec(), (iter_tx.value()._time_last_packet).subsec());
@@ -2319,16 +2319,16 @@ OdinAgent::print_stations_state()
 				HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter_rx = _rx_stats.find(it.key());
 				if (iter_rx != _rx_stats.end()) { 
 					fprintf(stderr,"[Odinagent.cc]          Uplink (reception)\n");
-					fprintf(stderr,"[Odinagent.cc]                -> rate: %i (%i kbps)\n", iter_rx.value()._rate,iter_rx.value()._rate * 500 );
-					fprintf(stderr,"[Odinagent.cc]                -> noise: %i\n", (iter_rx.value()._noise));
-					fprintf(stderr,"[Odinagent.cc]                -> signal: %i (%i dBm)\n", iter_rx.value()._signal, iter_rx.value()._signal - 256 ); // value - 256)
-					fprintf(stderr,"[Odinagent.cc]                -> len_pkt: %i bytes\n", iter_rx.value()._len_pkt); 
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_rate: %i (%i kbps)\n", iter_rx.value()._rate,iter_rx.value()._rate * 500 );
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_noise: %i\n", (iter_rx.value()._noise));
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_signal: %i (%i dBm)\n", iter_rx.value()._signal, iter_rx.value()._signal - 256 ); // value - 256)
+					fprintf(stderr,"[Odinagent.cc]                -> last_packet_length: %i bytes\n", iter_rx.value()._len_pkt); 
 
-					fprintf(stderr,"[Odinagent.cc]                -> packets: %i\n", iter_rx.value()._packets);
+					fprintf(stderr,"[Odinagent.cc]                -> total packets: %i\n", iter_rx.value()._packets);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_rate: %f Kbps\n", iter_rx.value()._avg_rate);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_signal: %f dBm\n", iter_rx.value()._avg_signal);
 					fprintf(stderr,"[Odinagent.cc]                -> avg_len_pkt: %f bytes\n", iter_rx.value()._avg_len_pkt);
-					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f seconds\n", iter_rx.value()._air_time);
+					fprintf(stderr,"[Odinagent.cc]                -> air_time: %f ms\n", iter_rx.value()._air_time);
 					
 					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_rx.value()._time_first_packet).sec(), (iter_rx.value()._time_first_packet).subsec());
 					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_rx.value()._time_last_packet).sec(), (iter_rx.value()._time_last_packet).subsec());
