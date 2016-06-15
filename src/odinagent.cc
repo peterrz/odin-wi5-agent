@@ -1299,7 +1299,7 @@ void
 OdinAgent::update_tx_stats(Packet *p)
 {
   struct click_wifi *w = (struct click_wifi *) p->data();
-  EtherAddress dst = EtherAddress(w->i_addr3); 			// Get the destination address
+  EtherAddress dst = EtherAddress(w->i_addr1); 			// Get the MAC destination address. In this case it is the first MAC address
 
   //struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
 
