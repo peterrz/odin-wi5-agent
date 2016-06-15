@@ -2313,6 +2313,9 @@ OdinAgent::print_stations_state()
 					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_tx.value()._time_first_packet).sec(), (iter_tx.value()._time_first_packet).subsec());
 					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_tx.value()._time_last_packet).sec(), (iter_tx.value()._time_last_packet).subsec());
 					
+					// Calculate the time between the two timestamps: the hearing interval in which the statistics have been calculated
+					Timestamp interval_tx = iter_tx.value()._time_first_packet - iter_tx.value()._time_last_packet;
+					fprintf(stderr,"[Odinagent.cc]                -> interval heard: %d.%06d \n", interval_tx.sec(), interval_tx.subsec());					
 					fprintf(stderr,"[Odinagent.cc]\n");
 				}
 
@@ -2332,6 +2335,10 @@ OdinAgent::print_stations_state()
 					
 					fprintf(stderr,"[Odinagent.cc]                -> first heard: %d.%06d \n", (iter_rx.value()._time_first_packet).sec(), (iter_rx.value()._time_first_packet).subsec());
 					fprintf(stderr,"[Odinagent.cc]                -> last heard: %d.%06d \n", (iter_rx.value()._time_last_packet).sec(), (iter_rx.value()._time_last_packet).subsec());
+
+					// Calculate the time between the two timestamps: the hearing interval in which the statistics have been calculated
+					Timestamp interval_rx = iter_rx.value()._time_first_packet - iter_rx.value()._time_last_packet;
+					fprintf(stderr,"[Odinagent.cc]                -> interval heard: %d.%06d \n", interval_rx.sec(), interval_rx.subsec());
 					
 					fprintf(stderr,"[Odinagent.cc]\n");
 				}
