@@ -105,7 +105,7 @@ TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 print '''
 // output 3 of odinagent goes to odinsocket
 odinagent[3] -> odinsocket
-rates :: AvailableRates(DEFAULT 24 36 48 108);	// wifi rates in multiples of 500kbps
+rates :: AvailableRates(DEFAULT 12 18 24 36 48 72 96 108);	// wifi rates in multiples of 500kbps
 control :: ControlSocket("TCP", 6777);
 chatter :: ChatterSocket("TCP", 6778);
 '''
