@@ -13,10 +13,10 @@
 
 import sys
 
-if (len(sys.argv) != 12):
+if (len(sys.argv) != 14):
     print 'Usage:'
     print ''
-    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE>' %(sys.argv[0])
+    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN>' %(sys.argv[0])
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
@@ -31,9 +31,12 @@ if (len(sys.argv) != 12):
     print 'DEBUG_ODIN: "00" no info displayed; "01" only basic info displayed; "02" all the info displayed; "11" or "12": demo mode (more separators)'
     print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
     print '         we are not able to send packets at different rates, so a single rate has to be specified'
+    print 'TX_POWER: as we are not able to modify it, you should add it here manually'
+    print 'HIDDEN: If HIDDEN is 1, then the AP will only send responses to the active scans targetted to the SSID of Odin'
+    print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
     print ''
     print 'Example:'
-    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L MM N > agent.click' %(sys.argv[0])
+    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L MM N P 0 > agent.click' %(sys.argv[0])
     print ''
     print 'and then run the .click file you have generated'
     print 'click$ ./bin/click agent.click'
@@ -52,6 +55,8 @@ AP_UNIQUE_IP = sys.argv[8]			# IP address of the wlan0 interface of the router w
 DEBUG_CLICK = int(sys.argv[9])
 DEBUG_ODIN = int(sys.argv[10])
 TX_RATE = int(sys.argv[11])
+TX_POWER = int(sys.argv[12])
+HIDDEN = int(sys.argv[13])
 
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in monitor mode. e.g. mon
@@ -76,8 +81,8 @@ print '''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
-odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s)
-''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE )
+odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s)
+''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN )
 
 print '''
 // send a ping to odinsocket every 2 seconds
