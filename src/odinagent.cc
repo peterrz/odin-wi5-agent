@@ -57,7 +57,8 @@ OdinAgent::OdinAgent()
   _beacon_timer(this),
   _debugfs_string(""),
   _ssid_agent_string(""),
-	_tx_rate(0)
+  _tx_rate(0),
+  _hidden(0)	
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -125,7 +126,8 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("DEBUGFS", _debugfs_string)
   .read_m("SSIDAGENT", _ssid_agent_string)
   .read_m("DEBUG_ODIN", _debug_level)
-	.read_m("TX_RATE", _tx_rate)		// as we are not yet able to do per-packet TPC, we use a fixed transmission rate, and we must read it to perform the calculations of the statistics
+  .read_m("TX_RATE", _tx_rate)		// as we are not yet able to do per-packet TPC, we use a fixed transmission rate, and we must read it to perform the calculations of the statistics
+  .read_m("HIDDEN", _hidden)
   .complete() < 0)
   return -1;
 
@@ -486,8 +488,9 @@ OdinAgent::recv_probe_request (Packet *p)
 		fprintf(stderr, "[Odinagent.cc] SSID frame: %s SSID AP: %s\n", ssid.c_str(), _ssid_agent_string.c_str());
 
   //If we're not aware of this LVAP, then send to the controller.
+  //If the SSID is hidden, then it will only send responses to the active scans targetted to the _ssid_agent_string
   if (_sta_mapping_table.find(src) == _sta_mapping_table.end()) {
-	  if ((ssid == "") || (ssid == _ssid_agent_string)) {  //if the ssid is blank (broadcast probe) or it is targetted to our SSID, forward it to the controller
+	  if (((ssid == "") && hidden == 0 ) || (ssid == _ssid_agent_string)) {  //if the ssid is blank (broadcast probe) or it is targetted to our SSID, forward it to the controller
 		if (_debug_level % 10 > 1)
 			fprintf(stderr, "[Odinagent.cc] Received probe request: not aware of this LVAP -> probe req sent to the controller\n");
 		StringAccum sa;
