@@ -58,6 +58,7 @@ OdinAgent::OdinAgent()
   _debugfs_string(""),
   _ssid_agent_string(""),
   _tx_rate(0),
+  _tx_power(0),
   _hidden(0)	
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
@@ -127,6 +128,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("SSIDAGENT", _ssid_agent_string)
   .read_m("DEBUG_ODIN", _debug_level)
   .read_m("TX_RATE", _tx_rate)		// as we are not yet able to do per-packet TPC, we use a fixed transmission rate, and we must read it to perform the calculations of the statistics
+  .read_m("TX_POWER", _tx_power)	// as we are not yet able to do per-packet TPC, we use a fixed transmission power, and we must read it to perform the calculations of the statistics
   .read_m("HIDDEN", _hidden)
   .complete() < 0)
   return -1;
@@ -490,7 +492,7 @@ OdinAgent::recv_probe_request (Packet *p)
   //If we're not aware of this LVAP, then send to the controller.
   //If the SSID is hidden, then it will only send responses to the active scans targetted to the _ssid_agent_string
   if (_sta_mapping_table.find(src) == _sta_mapping_table.end()) {
-	  if (((ssid == "") && hidden == 0 ) || (ssid == _ssid_agent_string)) {  //if the ssid is blank (broadcast probe) or it is targetted to our SSID, forward it to the controller
+	  if (((ssid == "") && _hidden == 0 ) || (ssid == _ssid_agent_string)) {  //if the ssid is blank (broadcast probe) or it is targetted to our SSID, forward it to the controller
 		if (_debug_level % 10 > 1)
 			fprintf(stderr, "[Odinagent.cc] Received probe request: not aware of this LVAP -> probe req sent to the controller\n");
 		StringAccum sa;
@@ -1325,7 +1327,7 @@ OdinAgent::update_tx_stats(Packet *p)
 	// we are not currently modifying per-packet transmission power
 	//so calculating the average makes no sense
   //stat._signal = ceh->rssi + _signal_offset;
-	stat._signal = 0;
+	stat._signal = _tx_power + 256;   // we add 256, as this is the usual way for storing the power
 
 	// we are not reading the noise value, so assign a 0
   //stat._noise = ceh->silence;
@@ -1338,9 +1340,24 @@ OdinAgent::update_tx_stats(Packet *p)
 
 	// Calculate the averaged statistics
   stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
+  
+  /* as we are not setting different values for each packet, we do not have to calculate this
+  // Calculate the value of the signal, converting from dBm to mW and back
+  double signal_mW;
+  double avg_signal_mW;
+  signal_mW = pow (10, (stat._signal - 256) / 10);
+  if (first_packet)	// if this is the first packet, the previous average will be 0
+    avg_signal_mW  = 0;
+  else 
+    avg_signal_mW  = pow (10, stat._avg_signal / 10);
+  avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/stat._packets);
+  stat._avg_signal = 10 * log10 (avg_signal_mW); // signal in dBm
   //stat._avg_signal = stat._avg_signal + ((stat._signal - 256 - stat._avg_signal)/stat._packets); // signal in dBm
   stat._avg_signal = 0;	// we are not currently modifying per-packet transmission power so calculating the average makes no sense
-	stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
+  */
+  stat._avg_signal = _tx_power; // in dBm
+  
+  stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
   stat._air_time = stat._air_time + ((double)(8*stat._len_pkt) / (double)(stat._rate*500)); // time used by this packet (in ms)
 
 	// store the timestamp of this packet as the one of the last packet
