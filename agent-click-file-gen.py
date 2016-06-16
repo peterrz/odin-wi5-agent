@@ -31,7 +31,7 @@ if (len(sys.argv) != 14):
     print 'DEBUG_ODIN: "00" no info displayed; "01" only basic info displayed; "02" all the info displayed; "11" or "12": demo mode (more separators)'
     print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
     print '         we are not able to send packets at different rates, so a single rate has to be specified'
-    print 'TX_POWER: as we are not able to modify it, you should add it here manually'
+    print 'TX_POWER: (in dBm) as we are not able to modify it, you should add it here manually'
     print '          for getting the value, use e.g. $# iw dev mon0 info'
     print 'HIDDEN: If HIDDEN is 1, then the AP will only send responses to the active scans targetted to the SSID of Odin'
     print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
