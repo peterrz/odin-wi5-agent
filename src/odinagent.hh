@@ -203,8 +203,9 @@ private:
   IPAddress _default_gw_addr;
   String _debugfs_string;
   String _ssid_agent_string;	// stores the SSID of the agent
-	int _tx_rate;
-	int _hidden;
+  int _tx_rate;
+  int _tx_power;
+  int _hidden;
 };
 
 
