@@ -204,6 +204,7 @@ private:
   String _debugfs_string;
   String _ssid_agent_string;	// stores the SSID of the agent
 	int _tx_rate;
+	int _hidden;
 };
 
 
