@@ -20,14 +20,29 @@ route add -net 155.210.156.0 netmask 255.255.255.0 gw 155.210.157.254 eth0
 # set the default gateway where masquerading is being performed
 # NOTE: This may vary according to your setup. Add your default gateway as needed
 route del default gw 155.210.157.254
-route add default gw 192.168.1.129
+route add default gw 192.168.101.129
 
-# if you have put click and start-up scripts in a usb device, mount the USB
+# this script assumes you have:
+# - in the root directory (current): start_odin.sh
+# - in the USB:
+#               init_ovs.sh
+#               init_cli.sh
+#               click        the compiled Click application
+#               a_agent.cli  the .cli file to be run by Click. It must be aligned
+
+# mount the USB
 mkdir -p /mnt/usb
-mount /dev/sda1 /mnt/usb/
+mount /dev/sda1 /mnt/usb/ #sda1 may have to be replaced by other device
+
+# move to the USB
 cd /mnt/usb/
 
-# start ovs and click with the corresponding scripts
-./script_start_ovs.sh
+
+# initiate openvswitch and click with the corresponding scripts:
+
+# initiate openvswitch (ovs)
+./init_ovs.sh
+
+# initiate click (cli)
 sleep 2
-./script_start_click.sh
+./init_cli.sh
