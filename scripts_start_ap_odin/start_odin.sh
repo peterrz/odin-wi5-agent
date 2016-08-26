@@ -25,24 +25,26 @@ route add default gw 192.168.101.129
 # this script assumes you have:
 # - in the root directory (current): start_odin.sh
 # - in the USB:
-#               init_ovs.sh
-#               init_cli.sh
-#               click        the compiled Click application
-#               a_agent.cli  the .cli file to be run by Click. It must be aligned
+#             - init_ovs.sh
+#             - init_cli.sh
+#             - click        the compiled Click application
+#             - a_agent.cli  the .cli file to be run by Click. It must be aligned
 
 # mount the USB
 mkdir -p /mnt/usb
 mount /dev/sda1 /mnt/usb/ #sda1 may have to be replaced by other device
 
-# move to the USB
-cd /mnt/usb/
-
 
 # initiate openvswitch and click with the corresponding scripts:
+
+# move to /mnt/usb
+cd /mnt/usb
 
 # initiate openvswitch (ovs)
 ./init_ovs.sh
 
-# initiate click (cli)
+# wait some time
 sleep 2
+
+# initiate click (cli)
 ./init_cli.sh

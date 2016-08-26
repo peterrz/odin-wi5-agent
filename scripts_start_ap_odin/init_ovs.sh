@@ -1,27 +1,31 @@
-# This has been taken from https://gist.github.com/marciolm/9f0ab13b877372d08e8f
+#!/bin/sh
+# This has been adapted from https://gist.github.com/marciolm/9f0ab13b877372d08e8f
 
 #Setup variables
 #My local IP address is required for the ovsdb server.
-MYIP=192.168.1.6
+MYIP=192.168.101.9
  
 # This is the OpenFlow controller ID which we're going to load into the OVS
-CTLIP=192.168.1.2
+CTLIP=192.168.101.129
  
 # This is our DataPath ID
 DPID=0000000000000212
  
-# This is the name of the bridge that we're going to be creating
+# This is the name of the bridge that we are going to create
 SW=br0
 
 # This is the TCP port number for the openvswitch database
-TCP_PORT_OVS=6632
+TCP_PORT_OVS_DBASE=6632
+
+# This is the TCP port number for the control of OpenFlow
+TCP_PORT_OPENFLOW=6633
 
 #What ports are we going to put in the OVS?
 #DPPORTS="eth0.1 eth0.2 eth0.3 eth0.4 wlan0 wlan0-2 wlan0-3"
 DPPORTS="eth1.1"
 
 #Alias some variables
-VSCTL="ovs-vsctl --db=tcp:$MYIP:$TCP_PORT_OVS"
+VSCTL="ovs-vsctl --db=tcp:$MYIP:$TCP_PORT_OVS_DBASE"
 OVSDB=/tmp/ovs-vswitchd.conf.db
  
 # Subroutine to wait until a port is ready
@@ -46,12 +50,12 @@ rm -f $OVSDB
 ovsdb-tool create $OVSDB /usr/share/openvswitch/vswitch.ovsschema
  
 # Start the OVSDB server and wait until it starts
-ovsdb-server $OVSDB --remote=ptcp:$TCP_PORT_OVS:$MYIP &
-#wait_port_listen $TCP_PORT_OVS
+ovsdb-server $OVSDB --remote=ptcp:$TCP_PORT_OVS_DBASE:$MYIP &
+#wait_port_listen $TCP_PORT_OVS_DBASE
 sleep 5
  
 # Start vSwitchd
-ovs-vswitchd tcp:$MYIP:$TCP_PORT_OVS --pidfile=ovs-vswitchd.pid --overwrite-pidfile -- &
+ovs-vswitchd tcp:$MYIP:$TCP_PORT_OVS_DBASE --pidfile=ovs-vswitchd.pid --overwrite-pidfile -- &
  
 # Create the bridge and pass in some configuration options
 $VSCTL add-br $SW
@@ -63,7 +67,7 @@ ifconfig $SW up
 #$VSCTL set bridge $SW protocols=OpenFlow10
  
 #Configure the switch to have an OpenFlow Controller.  This will contact the controller.
-$VSCTL set-controller $SW tcp:$CTLIP:6633
+$VSCTL set-controller $SW tcp:$CTLIP:$TCP_PORT_OPENFLOW
 
 # Turn off the fail-safe mode
 $VSCTL set-fail-mode $SW secure
