@@ -13,10 +13,10 @@
 
 import sys
 
-if (len(sys.argv) != 11):
+if (len(sys.argv) != 14):
     print 'Usage:'
     print ''
-    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN>' %(sys.argv[0])
+    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN>' %(sys.argv[0])
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
@@ -28,10 +28,16 @@ if (len(sys.argv) != 11):
     print 'SSIDAGENT is the name of the SSID of this Odin agent'
     print 'ODIN_AGENT_IP is the IP address of the AP where this script is running (the IP used for communicating with the controller)'
     print 'DEBUG_CLICK: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed'
-    print 'DEBUG_ODIN: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed'
+    print 'DEBUG_ODIN: "00" no info displayed; "01" only basic info displayed; "02" all the info displayed; "11" or "12": demo mode (more separators)'
+    print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
+    print '         we are not able to send packets at different rates, so a single rate has to be specified'
+    print 'TX_POWER: (in dBm) as we are not able to modify it, you should add it here manually'
+    print '          for getting the value, use e.g. $# iw dev mon0 info'
+    print 'HIDDEN: If HIDDEN is 1, then the AP will only send responses to the active scans targetted to the SSID of Odin'
+    print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
     print ''
     print 'Example:'
-    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L M > agent.click' %(sys.argv[0])
+    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L MM N P 0 > agent.click' %(sys.argv[0])
     print ''
     print 'and then run the .click file you have generated'
     print 'click$ ./bin/click agent.click'
@@ -49,13 +55,15 @@ DEFAULT_GW = sys.argv[8]			#the IP address of the Access Point.
 AP_UNIQUE_IP = sys.argv[8]			# IP address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
 DEBUG_CLICK = int(sys.argv[9])
 DEBUG_ODIN = int(sys.argv[10])
+TX_RATE = int(sys.argv[11])
+TX_POWER = int(sys.argv[12])
+HIDDEN = int(sys.argv[13])
 
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in monitor mode. e.g. mon
 TAP_INTERFACE_NAME = "ap"			# name of the TAP device that Click will create in the 
 STA_IP = "192.168.1.11"				# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
 STA_MAC = "74:F0:6D:20:D4:74"		# MAC address of the STA in the LVAP tuple. It only works for a single client without DHCP
-RATE = "108"						# e.g. if it is 108, this means 108*500kbps = 54Mbps
 
 print '''
 // This is the scheme:
@@ -74,8 +82,8 @@ print '''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
-odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s)
-''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN )
+odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s)
+''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN )
 
 print '''
 // send a ping to odinsocket every 2 seconds
@@ -103,7 +111,7 @@ TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 print '''
 // output 3 of odinagent goes to odinsocket
 odinagent[3] -> odinsocket
-rates :: AvailableRates(DEFAULT 24 36 48 108);	// wifi rates in multiples of 500kbps
+rates :: AvailableRates(DEFAULT 12 18 24 36 48 72 96 108);	// wifi rates in multiples of 500kbps
 control :: ControlSocket("TCP", 6777);
 chatter :: ChatterSocket("TCP", 6778);
 '''
@@ -156,7 +164,7 @@ q :: Queue(%s)
   -> SetTXRate (%s)	// e.g. if it is 108, this means 54Mbps=108*500kbps
   -> RadiotapEncap()
   -> to_dev :: ToDevice (%s0);
-''' % (QUEUE_SIZE, RATE, NETWORK_INTERFACE_NAMES )
+''' % (QUEUE_SIZE, TX_RATE, NETWORK_INTERFACE_NAMES )
 
 print '''
 odinagent[2]
