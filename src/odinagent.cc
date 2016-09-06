@@ -2228,9 +2228,6 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       EtherAddress sta_mac;
       EtherAddress vap_bssid;
 
-      if (agent->_debug_level % 10 > 0)
-		fprintf(stderr, "[Odinagent.cc] #################### Setting csa new and new channel %i\n", new_channel);      
-      
       Args args = Args(agent, errh).push_back_words(str);
       if (args.read_mp("STA_MAC", sta_mac)
             .read_mp("VAP_BSSID", vap_bssid)
@@ -2240,6 +2237,9 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
           return -1;
         }
 
+      if (agent->_debug_level % 10 > 0)
+		fprintf(stderr, "[Odinagent.cc] #################### Setting csa new and new channel %i\n", new_channel);      
+      
       Vector<String> ssidList;
       while (!args.empty()) {
         String vap_ssid;
@@ -2317,8 +2317,16 @@ OdinAgent::print_stations_state()
 
 				// Each VAP may have a number of SSIDs
 				//for (int i = 0; i < it.value()._vap_ssids.size (); i++) {
+				
+				// Print only if it has an valid IP
+				if (it.value()._sta_ip_addr_v4.empty() == false) { 
 					fprintf(stderr,"[Odinagent.cc]        Station -> BSSID: %s\n", (it.value()._vap_bssid).unparse_colon().c_str());
 					fprintf(stderr,"[Odinagent.cc]                -> IP addr: %s\n", it.value()._sta_ip_addr_v4.unparse().c_str());
+				}
+				else {
+					//fprintf(stderr,"[Odinagent.cc]        Station -> IP addr: 0.0.0.0\n" ); // for testing
+					continue;
+				}
 				//}
 
 				//stats
