@@ -109,7 +109,9 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms = 100;
+  _interval_ms_default = 100; // BI for normal mode
+  _interval_ms_burst = 10; // BI value for burst mode
+  _interval_ms = _interval_ms_default;
   _channel = 6;
   _new_channel = 1;
   _csa = false; //
@@ -253,9 +255,13 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
   if (it != _packet_buffer.end()) {
     OdinStationState oss = _sta_mapping_table.get (sta_mac);
 
-    for (int j = 1; j <= 5; j++) { // Send 5 beacons, help in the case of a channel switch
-    
-    	if (it.value() == "") {
+    _interval_ms = _interval_ms_burst; 							// Decreasing interval for improving the handoff
+    _beacon_timer.schedule_after_msec(_interval_ms);
+
+    //sleep(50);
+    for (int j = 1; j <= 40; j++) { // Send 40 beacons, help in the case of a channel switch
+   	
+	if (it.value() == "") {
     		for (int i = 0; i < oss._vap_ssids.size(); i++) {
     			send_beacon(sta_mac, oss._vap_bssid, oss._vap_ssids[i], true);
     		}
@@ -271,6 +277,8 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
     
     }
     _packet_buffer.erase(it.key());
+    _interval_ms = _interval_ms_default;	//Increasing beacon interval again to default value
+    _beacon_timer.schedule_after_msec(_interval_ms);
   }
 
 	if (_debug_level % 10 > 0)
@@ -614,6 +622,9 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
 	  memset(ptr, 0, 8);
 	  ptr += 8;
 	  actual_length += 8;
+	  
+	  /*This interval  is the BI expected in the other channel by the STA*/
+	  _interval_ms=_interval_ms_burst;
 
 	  uint16_t beacon_int = (uint16_t) _interval_ms;
 	  *(uint16_t *)ptr = cpu_to_le16(beacon_int);
@@ -717,6 +728,7 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
 	  }
 
 	  output(0).push(p);
+	  _interval_ms = _interval_ms_default;
 	}
 
 	else { // For NO channel switch announcement or probe responder
