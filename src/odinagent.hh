@@ -177,6 +177,8 @@ public:
   HashTable<EtherAddress, StationStats> _rx_stats;
 
   int _interval_ms; // Beacon interval: common between all VAPs for now
+  int _interval_ms_default; // Beacon interval: normal mode timer
+  int _interval_ms_burst; // Beacon interval: burst mode timer, used during channel switch
   int _channel; // Channel to be shared by all VAPs.
   int _new_channel; // New channel for CSA
   bool _csa; // For channel switch announcement
