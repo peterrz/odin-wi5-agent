@@ -2161,12 +2161,13 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 			if (agent->_debug_level % 10 > 0)
 				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
       std::stringstream ss;
-      ss << "hostapd_cli chan_switch " << agent->_count_csa_beacon_default << " " << channel;
+      // Set channel to wlan0
+      ss << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << channel;
       std::string str = ss.str();
       char *cstr = new char[str.length() + 1];
       strcpy(cstr, str.c_str());
       system(cstr);
-      system("iw mon0 info");
+      system("iw dev wlan0 info");
       break;
     }
     case handler_interval: {
@@ -2349,7 +2350,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
         }
 
       if (agent->_debug_level % 10 > 0)
-		fprintf(stderr, "[Odinagent.cc] #################### Setting csa new and new channel %i\n", new_channel);      
+		fprintf(stderr, "[Odinagent.cc] #################### Setting csa and new channel %i\n", new_channel);      
       
       Vector<String> ssidList;
       while (!args.empty()) {
@@ -2389,8 +2390,8 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
-    	// Set channel to scan
-    	ss << "iw dev wlan1 set channel " << channel; 
+    	// Set channel to scan in wlan1
+    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << channel; 
     	std::string str = ss.str();
     	char *cstr = new char[str.length() + 1];
     	strcpy(cstr, str.c_str());
