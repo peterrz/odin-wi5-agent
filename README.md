@@ -18,6 +18,7 @@ tested in userspace mode so far. To build:
 
 2. Build Click with the `--enable-local` and `--enable-userlevel` flag.
 
+3. ```sh $make```
 
 agent-click-file-gen.py
 -----------------------
