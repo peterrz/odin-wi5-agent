@@ -2047,7 +2047,7 @@ OdinAgent::read_handler(Element *e, void *user_data)
     case handler_scan_client: {
           // Scanning result
     	  sa << agent->_scanning_result << "\n";
-          fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan file \n");
+          fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", _scannig_result);
     	  agent->_active_scanning = false;// Disable scanning
           break;
      }
