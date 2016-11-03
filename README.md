@@ -16,7 +16,7 @@ tested in userspace mode so far. To build:
 
 1. Add these files to <click>/elements/local/
 
-2. Build Click with the --enable-local and --enable-userspace flag.
+2. Build Click with the `--enable-local` and `--enable-userlevel` flag.
 
 
 agent-click-file-gen.py
