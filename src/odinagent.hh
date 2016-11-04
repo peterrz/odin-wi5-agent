@@ -140,17 +140,14 @@ public:
     int _rate;
     int _noise;
     int _signal;
-		int _len_pkt;
-
-		int _packets;					//number of packets
-		double _avg_signal;		//average value of the signal
-		double _avg_rate;			//average rate of the packets
-		double _avg_len_pkt;	//average length of the packets
-		double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
-
-		Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
+	int _len_pkt;
+	int _packets;					//number of packets
+	double _avg_signal;		//average value of the signal
+	double _avg_rate;			//average rate of the packets
+	double _avg_len_pkt;	//average length of the packets
+	double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
+	Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
     Timestamp _time_last_packet;		//timestamp of the last packet included in the statistics
-
     StationStats() {
       memset(this, 0, sizeof(*this));
     }
@@ -198,7 +195,7 @@ public:
 
 private:
   void compute_bssid_mask ();
-	void update_tx_stats(Packet *p);
+  void update_tx_stats(Packet *p);
   void update_rx_stats(Packet *p);
   EtherAddress _hw_mac_addr;
   class AvailableRates *_rtable;

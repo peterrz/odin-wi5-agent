@@ -1548,7 +1548,7 @@ OdinAgent::push(int port, Packet *p)
 
     EtherAddress src = EtherAddress(w->i_addr2);
 
-		// Update Rx statistics
+    // Update Rx statistics
     update_rx_stats(p);
 
     type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
@@ -1659,7 +1659,7 @@ OdinAgent::push(int port, Packet *p)
     if (_sta_mapping_table.find (eth) != _sta_mapping_table.end ())
     {
       OdinStationState oss = _sta_mapping_table.get (eth);
-			// If the client tried to make an ARP request for
+      // If the client tried to make an ARP request for
       // its default gateway, and there is a response coming from
       // upstream, we have to correct the resolved hw-addr with the
       // VAP-BSSID to which the client corresponds.
@@ -1677,11 +1677,10 @@ OdinAgent::push(int port, Packet *p)
       //  }
       //}
 
-			// Add wifi header
-			Packet *p_out = wifi_encap (p, oss._vap_bssid);
-	  
-			// Update Tx statistics with this packet
-			update_tx_stats(p_out);
+	  // Add wifi header
+      Packet *p_out = wifi_encap (p, oss._vap_bssid);
+      // Update Tx statistics with this packet
+      update_tx_stats(p_out);
       output(2).push(p_out);
       return;
     }
@@ -2045,9 +2044,10 @@ OdinAgent::read_handler(Element *e, void *user_data)
     }
     
     case handler_scan_client: {
+          int scanning_result = agent->_scanning_result;
           // Scanning result
     	  sa << agent->_scanning_result << "\n";
-          fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", _scannig_result);
+          fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", scanning_result);
     	  agent->_active_scanning = false;// Disable scanning
           break;
      }
@@ -2366,7 +2366,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       agent->_new_channel = new_channel;//How to put the channel into new_channel?
       agent->_csa = true;
       
-      for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA 5 times
+      for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA n times
     	  //if (agent->_debug_level % 10 > 0)
     	  		//fprintf(stderr,i,"\n");
     	  for (Vector<String>::const_iterator it = ssidList.begin();
@@ -2390,11 +2390,12 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
-    	// Set channel to scan in wlan1
+    	// Set channel to scan in wlan1 (auxiliary)
     	ss << "hostapd_cli -i wlan1 chan_switch 1 " << channel; 
     	std::string str = ss.str();
     	char *cstr = new char[str.length() + 1];
     	strcpy(cstr, str.c_str());
+    	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	system(cstr);
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	// Enable scanning (FIXME: time to begin this action)
