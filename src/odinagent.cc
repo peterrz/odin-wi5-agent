@@ -112,8 +112,8 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _interval_ms_default = 100; // BI for normal mode
   _interval_ms_burst = 10; // BI value for burst mode
   _interval_ms = _interval_ms_default;
-  _channel = 6;
-  _new_channel = 1;
+  _channel = 6; // Actually frequency
+  _new_channel = 1; // Actually frequency
   _csa = false; //
   _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
   _csa_count = _csa_count_default; 
@@ -2150,24 +2150,25 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     }
     case handler_channel: { // Modified, now it change the physical channel
       int channel;
+      int frequency;
       if (Args(agent, errh).push_back_words(str)
         .read_mp("CHANNEL", channel)
         .complete() < 0)
         {
           return -1;
         }
-
+      frequency = convert_channel_to_frequency(channel);
       agent->_channel = channel;
 			if (agent->_debug_level % 10 > 0)
 				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
       std::stringstream ss;
       // Set channel to wlan0
-      ss << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << channel;
+      ss << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency;
       std::string str = ss.str();
       char *cstr = new char[str.length() + 1];
       strcpy(cstr, str.c_str());
       system(cstr);
-      system("iw dev wlan0 info");
+      system("sleep 2 && iw dev wlan0 info &");
       break;
     }
     case handler_interval: {
@@ -2381,6 +2382,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	EtherAddress sta_mac;
     	std::stringstream ss;
     	int channel;
+    	int frequency;
     	if (Args(agent, errh).push_back_words(str)
     	    .read_mp("STA_MAC", sta_mac)
     	    .read_mp("CHANNEL", channel)
@@ -2390,12 +2392,12 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
+    	frequency = convert_channel_to_frequency(channel);
     	// Set channel to scan in wlan1 (auxiliary)
-    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << channel; 
+    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency;
     	std::string str = ss.str();
     	char *cstr = new char[str.length() + 1];
     	strcpy(cstr, str.c_str());
-    	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	system(cstr);
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	// Enable scanning (FIXME: time to begin this action)
@@ -2585,6 +2587,31 @@ void misc_thread(Timer *timer, void *data){
 
     timer->reschedule_after_sec(RESCHEDULE_INTERVAL_GENERAL);
 
+}
+
+/*Miscellaneous*/
+int convert_frequency_to__channel(int freq) {
+    if (freq >= 2412 & freq <= 2484) {
+        int chan = (freq - 2412) / 5 + 1;
+        return chan;
+    } else if (freq >= 5170 & freq <= 5825) {
+        int chan = (freq - 5170) / 5 + 34;
+        return chan;
+    } else {
+        return -1;
+    }
+}
+
+int convert_channel_to_frequency(int chan) {
+    if (chan >= 1 & chan <= 14) {
+        int freq = 5 * (chan - 1) + 2412;
+        return freq;
+    } else if (chan >= 34 & chan <= 165) {
+        int freq = 5 * (chan - 34) + 5170;
+        return freq;
+    } else {
+        return -1;
+    }
 }
 
 
