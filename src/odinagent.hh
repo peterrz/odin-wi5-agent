@@ -54,7 +54,9 @@ public:
   void add_handlers();
   void run_timer(Timer *timer);
   void push(int, Packet *);
-
+  /*Miscellaneous*/
+  int convert_frequency_to__channel(int freq);
+  int convert_channel_to_frequency(int chan);
 
   // Extend this struct to add
   // new per-sta VAP state
@@ -178,6 +180,7 @@ public:
   int _interval_ms_default; // Beacon interval: normal mode timer
   int _interval_ms_burst; // Beacon interval: burst mode timer, used during channel switch
   int _channel; // Channel to be shared by all VAPs.
+  int _channel_aux; // Channel to be used for scanning.
   int _new_channel; // New channel for CSA
   bool _csa; // For channel switch announcement
   int _count_csa_beacon; // For channel switch announcement
@@ -209,6 +212,7 @@ private:
   int _tx_rate;
   int _tx_power;
   int _hidden;
+
 };
 
 
