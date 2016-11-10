@@ -2380,6 +2380,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     case handler_scan_client: { // need testing
     	EtherAddress sta_mac;
     	std::stringstream ss;
+    	char *cstr = new char[str.length() + 1];
     	int channel;
     	int frequency;
     	if (Args(agent, errh).push_back_words(str)
@@ -2391,20 +2392,21 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
+    	frequency = agent->convert_channel_to_frequency(channel);
+    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency; // Set channel to scan in wlan1 (auxiliary)
+    	std::string str = ss.str();
+    	strcpy(cstr, str.c_str());
     	if (agent->_channel_aux != channel) {
-    		frequency = agent->convert_channel_to_frequency(channel);
     		agent->_channel_aux = channel;
-    		ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency; // Set channel to scan in wlan1 (auxiliary)
-    		std::string str = ss.str();
-    		char *cstr = new char[str.length() + 1];
-    		strcpy(cstr, str.c_str());
     		system(cstr);
     	}
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
-    	// Enable scanning (FIXME: time to begin this action)
-    	agent->_active_scanning = true;
-    	agent->_scanned_sta_mac = sta_mac;
-    	agent->_scanning_result = 0;
+    	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
+    		// Enable scanning (FIXME: time to begin this action)
+    		agent->_active_scanning = true;
+    		agent->_scanned_sta_mac = sta_mac;
+    		agent->_scanning_result = 0;
+    	}
     	break;
     }
     
