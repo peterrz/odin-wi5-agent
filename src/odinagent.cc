@@ -2422,7 +2422,7 @@ OdinAgent::add_handlers()
   add_read_handler("channel", read_handler, handler_channel);
   add_read_handler("interval", read_handler, handler_interval);
   add_read_handler("rxstats", read_handler, handler_rxstat);
-	add_read_handler("txstats", read_handler, handler_txstat);
+  add_read_handler("txstats", read_handler, handler_txstat);
   add_read_handler("subscriptions", read_handler, handler_subscriptions);
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
