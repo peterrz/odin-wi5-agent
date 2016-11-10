@@ -54,6 +54,7 @@ public:
   void add_handlers();
   void run_timer(Timer *timer);
   void push(int, Packet *);
+
   /*Miscellaneous*/
   int convert_frequency_to__channel(int freq);
   int convert_channel_to_frequency(int chan);

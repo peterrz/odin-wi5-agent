@@ -1687,8 +1687,7 @@ OdinAgent::push(int port, Packet *p)
     }
   }
 
-  else if (port == 2) {
-		// if port == 2, paket is coming from the lower layer (from scanning device)
+  else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
 	if (_active_scanning) {
 
 		if (p->length() < sizeof(struct click_wifi)) {
@@ -1714,6 +1713,7 @@ OdinAgent::push(int port, Packet *p)
 			// stat._packets++;
 			// stat._last_received.assign_now();
 			_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
+			fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
 		}
 	}
   }
@@ -2162,11 +2162,11 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 			if (agent->_debug_level % 10 > 0)
 				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
       std::stringstream ss;
-      ss << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency; // Set channel to wlan0
+      ss << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency;
       std::string str = ss.str();
       char *cstr = new char[str.length() + 1];
       strcpy(cstr, str.c_str());
-      system(cstr);
+      system(cstr); // Set channel to wlan0
       system("sleep 2 && iw dev wlan0 info &");
       break;
     }
@@ -2393,17 +2393,16 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
     	frequency = agent->convert_channel_to_frequency(channel);
-    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency; // Set channel to scan in wlan1 (auxiliary)
+    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency;
     	std::string str = ss.str();
     	strcpy(cstr, str.c_str());
     	if (agent->_channel_aux != channel) {
     		agent->_channel_aux = channel;
-    		system(cstr);
+    		system(cstr); // Set channel to scan in wlan1 (auxiliary)
     	}
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
-    		// Enable scanning (FIXME: time to begin this action)
-    		agent->_active_scanning = true;
+    		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
     		agent->_scanned_sta_mac = sta_mac;
     		agent->_scanning_result = 0;
     	}
