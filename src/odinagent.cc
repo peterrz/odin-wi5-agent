@@ -2393,7 +2393,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
     	frequency = agent->convert_channel_to_frequency(channel);
-    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency;
+    	ss << "hostapd_cli -i wlan1 chan_switch 1 " << frequency << " &";
     	std::string str = ss.str();
     	strcpy(cstr, str.c_str());
     	if (agent->_channel_aux != channel) {
