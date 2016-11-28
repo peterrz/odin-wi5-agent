@@ -42,7 +42,7 @@ int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of ol
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-uint32_t THRESHOLD_PUBLISH_SENT = 100000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
+uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
 int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
 
 OdinAgent::OdinAgent()
@@ -1688,7 +1688,8 @@ OdinAgent::push(int port, Packet *p)
   }
 
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
-	if (_active_scanning) {
+	//if (_active_scanning) {
+	if (true) {
 
 		if (p->length() < sizeof(struct click_wifi)) {
 		  p->kill();
@@ -1840,7 +1841,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
       }
     }
 
-	if (matched) {
+	if (matched) { //  && (_active_scanning == false)
 			if (sub.sta_addr != EtherAddress()) {
 			// It is a specific subscription for a single MAC (not '*')
     			// Calculate the time since the last publish was sent
@@ -2402,7 +2403,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
-    		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
+    		agent->_active_scanning = false; // Enable scanning (FIXME: time to begin this action)
     		agent->_scanned_sta_mac = sta_mac;
     		agent->_scanning_result = 0;
     	}
