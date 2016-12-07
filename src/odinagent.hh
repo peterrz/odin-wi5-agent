@@ -87,6 +87,7 @@ public:
   void recv_probe_request (Packet *p);
   void recv_deauth (Packet *p);
   void send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bool probe);
+  String recv_beacon (Packet *p);
   void recv_assoc_request (Packet *p);
   void send_assoc_response (EtherAddress, uint16_t status, uint16_t associd);
   void recv_open_auth_request (Packet *p);
@@ -115,7 +116,6 @@ public:
   // new handlers.
   enum {
     handler_view_mapping_table,
-    handler_num_slots,
     handler_add_vap,
     handler_set_vap,
     handler_rxstat,
@@ -131,6 +131,9 @@ public:
     handler_signal_strength_offset,
     handler_channel_switch_announcement,
 	handler_scan_client,
+	handler_scan_APs,
+	handler_send_mesurement_beacon,
+	handler_scanning_flags,
   };
 
   // Rx-stats about stations
@@ -173,12 +176,42 @@ public:
   int _count_csa_beacon_default; // Default number of beacons before channel switch
   int _csa_count; // For _csa FALSE-->TRUE
   int _csa_count_default;
-  bool _active_scanning; // To active scanning
-  EtherAddress _scanned_sta_mac; // MAC to scan
-  int _scanning_result; // Result for scanning
-  Vector<Subscription> _subscription_list;
-  //bool _debug;
+
+  //Scanning
+  
+  bool _active_client_scanning; // To active STA scanning
+  EtherAddress _scanned_sta_mac; // STA MAC to scan
+  int _client_scanning_result; // Result for STA scanning
+ 
+  class APScanning {
+    public:
+        EtherAddress bssid;
+        String ssid;
+		double avg_signal;
+		int packets; //# packets
+	APScanning() {
+      memset(this, 0, sizeof(*this));
+    }
+  };
+  
+  bool _active_AP_scanning; // To active AP scanning
+  String _scanning_SSID; // SSID to scan
+  int _AP_scanning_interval; // Interval to scan APs (ms)
+  int _num_intervals_for_AP_scanning; // count the number of scanning intervals for AP scanning 
+  Vector<APScanning> _APScanning_list;
+
+  bool _active_mesurement_beacon; // To active mesurement beacon
+  String _mesurement_beacon_SSID; // SSID to scan
+  int _mesurement_beacon_interval; // Interval to scan (ms)
+  int _num_mesurement_beacon; // number of mesurement beacon to send
+  int _num_intervals_for_mesurement_beacon; // count the number of scanning intervals for mesurement beacons
+  void send_mesurement_beacon();
+
+  //debug
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed
+  
+  //Subscription
+  Vector<Subscription> _subscription_list;
   HashTable<EtherAddress, String> _packet_buffer;
   void match_against_subscriptions(StationStats stats, EtherAddress src);
 
@@ -191,6 +224,7 @@ private:
   Timer _beacon_timer;
   Timer _clean_stats_timer;
   Timer _general_timer;
+  Timer _scanning_timer;
   IPAddress _default_gw_addr;
   String _debugfs_string;
   String _ssid_agent_string;	// stores the SSID of the agent
