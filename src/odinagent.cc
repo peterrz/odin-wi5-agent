@@ -113,7 +113,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _interval_ms_burst = 10; // BI value for burst mode
   _interval_ms = _interval_ms_default;
   _channel = 6;
-  _channel_aux = 11;
+  _channel_aux = 0; // Initialized in 0, so it will change the channel the first time
   _new_channel = 1;
   _csa = false; //
   _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
@@ -1463,7 +1463,7 @@ OdinAgent::update_rx_stats(Packet *p)
 }
 
 /**
- * This element has two input ports and 4 output ports.
+ * This element has three input ports and 4 output ports.
  *
  * In-port-0: Any 802.11 encapsulated frame. Expected
  *            to be coming from a physical device
@@ -1688,8 +1688,8 @@ OdinAgent::push(int port, Packet *p)
   }
 
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
-	//if (_active_scanning) {
-	if (true) {
+	if (_active_scanning) {
+	//if (false) { // For testing
 
 		if (p->length() < sizeof(struct click_wifi)) {
 		  p->kill();
@@ -2400,12 +2400,13 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	if (agent->_channel_aux != channel) {
     		agent->_channel_aux = channel;
     		system(cstr); // Set channel to scan in wlan1 (auxiliary)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting channel to scan in auxiliary interface \n"); // for testing
     	}
     	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", cstr); // for testing
     	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
-    		agent->_active_scanning = false; // Enable scanning (FIXME: time to begin this action)
-    		agent->_scanned_sta_mac = sta_mac;
     		agent->_scanning_result = 0;
+    		agent->_scanned_sta_mac = sta_mac;
+    		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
     	}
     	break;
     }
