@@ -9,12 +9,12 @@ VSCTL="ovs-vsctl"
 
 ## Setting interfaces
 echo "Setting interfaces"
-ifconfig wlan0 down # Main interface
-ifconfig wlan1 down # Auxiliary interface
+ifconfig wlan0 down
+ifconfig wlan1 down
 iw phy phy0 interface add mon0 type monitor
 iw phy phy1 interface add mon1 type monitor
 iw phy phy0 set retry short 4
-iw phy phy1 set retry short 4
+#iw dev wlan0 set channel 1
 ifconfig mon0 up
 ifconfig mon1 up
 ifconfig wlan0 up
@@ -27,9 +27,17 @@ route add -net 155.210.156.0 netmask 255.255.255.0 gw 155.210.157.254 eth0
 #route del default gw 155.210.157.254
 #route add default gw 192.168.1.131
 
-## We assume that OpenvSwitch runs when OpenWRT starts up
-echo "Restarting OpenvSwitch daemon"
+## Mount USB
+echo "Mounting USB"
+if [ ! -d "/mnt/usb" ]; then
+  mkdir -p /mnt/usb
+fi
+mount /dev/sda1 /mnt/usb/
+
+## OVS
+echo "Restarting OpenvSwitch"
 /etc/init.d/openvswitch stop
+sleep 1
 echo "Cleaning DB"
 if [ -d "/etc/openvswitch" ]; then
   rm -r /etc/openvswitch
@@ -43,8 +51,8 @@ fi
 if [ -f "/var/run/ovs-vswitchd.pid" ]; then
   rm /var/run/ovs-vswitchd.pid
 fi
+echo "Lanching OVS"
 /etc/init.d/openvswitch start
-echo "Configuring OpenvSwitch"
 $VSCTL add-br $SW # Create the bridge
 ifconfig $SW up # In OpenWrt 15.05 the bridge is created down
 $VSCTL set-controller $SW tcp:$CTLIP:6633 # Configure the OpenFlow Controller.
@@ -55,15 +63,13 @@ for i in $DPPORTS ; do # Including ports to OVS
 done
 
 ## Launch click
-echo "Mounting USB" # Because we have click into the USB
-if [ ! -d "/mnt/usb" ]; then
-  mkdir -p /mnt/usb
-fi
-mount /dev/sda1 /mnt/usb/ 
+echo "Lanching Click"
 cd /mnt/usb
 sleep 1
 ./click aagent9.cli &
 sleep 1
+# Add ap to OVS
+echo "Adding Click interface to OVS"
 ifconfig ap up # Adding ap interface (click Interface) to OVS
 $VSCTL add-port $SW ap
 sleep 1

@@ -42,7 +42,7 @@ int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of ol
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-uint32_t THRESHOLD_PUBLISH_SENT = 100000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
+uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
 int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
 
 OdinAgent::OdinAgent()
@@ -113,12 +113,16 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _interval_ms_burst = 10; // BI value for burst mode
   _interval_ms = _interval_ms_default;
   _channel = 6;
+  _channel_aux = 0; // Initialized in 0, so it will change the channel the first time
   _new_channel = 1;
   _csa = false; //
   _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
   _csa_count = _csa_count_default; 
   _count_csa_beacon_default = 4; // Number of beacons before channel switch
   _count_csa_beacon = _count_csa_beacon_default;
+  _active_scanning = false;
+  _scanned_sta_mac = EtherAddress();
+  _scanning_result = 0;
 
 	// read the arguments of the .cli file
   if (Args(conf, this, errh)
@@ -1459,12 +1463,14 @@ OdinAgent::update_rx_stats(Packet *p)
 }
 
 /**
- * This element has two input ports and 4 output ports.
+ * This element has three input ports and 4 output ports.
  *
  * In-port-0: Any 802.11 encapsulated frame. Expected
  *            to be coming from a physical device
  * In-port-1: Any ethernet encapsulated frame. Expected
  *            to be coming from a tap device
+ * In-port-2: Any 802.11 encapsulated frame. Used exclusively
+ * 			  for scanning clients.
  *
  * Out-port-0: If in-port-0, and packet was a management frame,
  *             then send out management response.
@@ -1487,6 +1493,50 @@ OdinAgent::push(int port, Packet *p)
   if (port == 0) {
     // if port == 0, paket is coming from the lower layer
 
+		/****************************************************************************
+		*****************************************************************************
+		**  If scanning interface is mon0 put this code when port == 0  *************
+		*****************************************************************************
+		*****************************************************************************/
+		/*  	if (_active_scanning) {
+
+			if (p->length() < sizeof(struct click_wifi)) {
+			  p->kill();
+			  return;
+			}
+
+			struct click_wifi *w = (struct click_wifi *) p->data();
+			EtherAddress src = EtherAddress(w->i_addr2);
+			if (src == _scanned_sta_mac) {
+				// Get station statistics
+				struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+				// StationStats stat;
+				// HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
+				// if (it == _rx_stats.end())
+				//   stat = StationStats();
+				// else
+				//   stat = it.value();
+
+				// stat._rate = ceh->rate;
+				// stat._noise = ceh->silence;
+				// stat._signal = ceh->rssi + _signal_offset;
+				// stat._packets++;
+				// stat._last_received.assign_now();
+				_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
+			}
+		}*/
+
+		/****************************************************************************
+		*****************************************************************************
+		*****************************************************************************
+		*****************************************************************************/
+
+		/****************************************************************************
+		*****************************************************************************
+		**  If scanning interface is mon1 leave this code when port == 0  *************
+		*****************************************************************************
+		*****************************************************************************/	  
+	  
     if (p->length() < sizeof(struct click_wifi)) {
       p->kill();
       return;
@@ -1499,7 +1549,7 @@ OdinAgent::push(int port, Packet *p)
 
     EtherAddress src = EtherAddress(w->i_addr2);
 
-		// Update Rx statistics
+    // Update Rx statistics
     update_rx_stats(p);
 
     type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
@@ -1592,6 +1642,10 @@ OdinAgent::push(int port, Packet *p)
       output(1).push(p);
       return;
     }
+	/****************************************************************************
+	*****************************************************************************
+	*****************************************************************************
+	*****************************************************************************/
   }
   else if (port == 1) {
     // This means that the packet is coming from the higher layer,
@@ -1606,7 +1660,7 @@ OdinAgent::push(int port, Packet *p)
     if (_sta_mapping_table.find (eth) != _sta_mapping_table.end ())
     {
       OdinStationState oss = _sta_mapping_table.get (eth);
-			// If the client tried to make an ARP request for
+      // If the client tried to make an ARP request for
       // its default gateway, and there is a response coming from
       // upstream, we have to correct the resolved hw-addr with the
       // VAP-BSSID to which the client corresponds.
@@ -1624,16 +1678,53 @@ OdinAgent::push(int port, Packet *p)
       //  }
       //}
 
-			// Add wifi header
-			Packet *p_out = wifi_encap (p, oss._vap_bssid);
-	  
-			// Update Tx statistics with this packet
-			update_tx_stats(p_out);
+	  // Add wifi header
+      Packet *p_out = wifi_encap (p, oss._vap_bssid);
+      // Update Tx statistics with this packet
+      update_tx_stats(p_out);
       output(2).push(p_out);
       return;
     }
   }
 
+  else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
+	if (_active_scanning) {
+	//if (true) { // For testing
+
+		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated \n");
+
+		if (p->length() < sizeof(struct click_wifi)) {
+			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> killing packet \n");
+		  p->kill();
+		  return;
+		}
+
+		struct click_wifi *w = (struct click_wifi *) p->data();
+		EtherAddress src = EtherAddress(w->i_addr2);
+		if (src == _scanned_sta_mac) {
+			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> found packet for  %s\n", src.unparse_colon().c_str());
+			// Get station statistics
+			struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+			// StationStats stat;
+			// HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
+			// if (it == _rx_stats.end())
+			//   stat = StationStats();
+			// else
+			//   stat = it.value();
+
+			// stat._rate = ceh->rate;
+			// stat._noise = ceh->silence;
+			// stat._signal = ceh->rssi + _signal_offset;
+			// stat._packets++;
+			// stat._last_received.assign_now();
+			_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
+			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
+		}
+		//_scanning_result = 200; // For testing
+		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result); // For testing
+	}
+  }
+  
   p->kill();
   return;
 }
@@ -1756,7 +1847,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
       }
     }
 
-	if (matched) {
+	if (matched) { //  && (_active_scanning == false)
 			if (sub.sta_addr != EtherAddress()) {
 			// It is a specific subscription for a single MAC (not '*')
     			// Calculate the time since the last publish was sent
@@ -1826,6 +1917,12 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
 }
 
 
+/*
+ * We have include new handlers an modified others
+ *
+ * @author Luis Sequeira <sequeira@unizar.es>
+ *
+ * */
 String
 OdinAgent::read_handler(Element *e, void *user_data)
 {
@@ -1953,6 +2050,14 @@ OdinAgent::read_handler(Element *e, void *user_data)
       sa << agent->_mean <<  " " <<  agent->_num_mean << " " << variance << "\n";
       break;
     }
+    
+    case handler_scan_client: {
+          sa << agent->_scanning_result << "\n"; // Scanned result
+    	  agent->_active_scanning = false;// Disable scanning
+    	  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", agent->_scanning_result);
+          break;
+     }
+    
   }
 
   return sa.take_string();
@@ -2049,25 +2154,23 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
         }
       break;
     }
-    case handler_channel: { // Modified, now it change the physical channel
+    case handler_channel: {
       int channel;
+      int frequency;
+      StringAccum sa;
       if (Args(agent, errh).push_back_words(str)
         .read_mp("CHANNEL", channel)
         .complete() < 0)
         {
           return -1;
         }
-
+      frequency = agent->convert_channel_to_frequency(channel);
       agent->_channel = channel;
 			if (agent->_debug_level % 10 > 0)
 				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
-      std::stringstream ss;
-      ss << "hostapd_cli chan_switch " << agent->_count_csa_beacon_default << " " << channel;
-      std::string str = ss.str();
-      char *cstr = new char[str.length() + 1];
-      strcpy(cstr, str.c_str());
-      system(cstr);
-      system("iw mon0 info");
+      sa << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency;
+      system(sa.c_str()); // Set channel to wlan0
+      system("sleep 2 && iw dev wlan0 info &");
       break;
     }
     case handler_interval: {
@@ -2250,7 +2353,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
         }
 
       if (agent->_debug_level % 10 > 0)
-		fprintf(stderr, "[Odinagent.cc] #################### Setting csa new and new channel %i\n", new_channel);      
+		fprintf(stderr, "[Odinagent.cc] #################### Setting csa and new channel %i\n", new_channel);      
       
       Vector<String> ssidList;
       while (!args.empty()) {
@@ -2266,7 +2369,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       agent->_new_channel = new_channel;//How to put the channel into new_channel?
       agent->_csa = true;
       
-      for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA 5 times
+      for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA n times
     	  //if (agent->_debug_level % 10 > 0)
     	  		//fprintf(stderr,i,"\n");
     	  for (Vector<String>::const_iterator it = ssidList.begin();
@@ -2276,7 +2379,38 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       }
       
       break;
-    }   
+    }
+    case handler_scan_client: { // need testing
+    	EtherAddress sta_mac;
+    	int scan_channel;
+    	int frequency;
+    	StringAccum sa;
+    	Args args = Args(agent, errh).push_back_words(str);
+    	if (args.read_mp("STA_MAC", sta_mac)
+    	    .read_mp("CHANNEL", scan_channel)
+    	    .complete() < 0)
+    	{
+    		return -1;
+    	}
+    	if (agent->_debug_level % 10 > 0)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
+    	frequency = agent->convert_channel_to_frequency(scan_channel);
+    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " &";
+    	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", sa.c_str()); // for testing
+    	if (agent->_channel_aux != scan_channel) {
+    		agent->_channel_aux = scan_channel;
+    		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting channel to scan in auxiliary interface \n"); // for testing
+    	}
+    	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
+    		agent->_scanning_result = 0;
+    		agent->_scanned_sta_mac = sta_mac;
+    		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting scanning --> true \n"); // for testing
+    	}
+    	break;
+    }
+    
   }
   return 0;
 }
@@ -2289,10 +2423,11 @@ OdinAgent::add_handlers()
   add_read_handler("channel", read_handler, handler_channel);
   add_read_handler("interval", read_handler, handler_interval);
   add_read_handler("rxstats", read_handler, handler_rxstat);
-	add_read_handler("txstats", read_handler, handler_txstat);
+  add_read_handler("txstats", read_handler, handler_txstat);
   add_read_handler("subscriptions", read_handler, handler_subscriptions);
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
+  add_read_handler("scan_client", read_handler, handler_scan_client);
 
   add_write_handler("add_vap", write_handler, handler_add_vap);
   add_write_handler("set_vap", write_handler, handler_set_vap);
@@ -2306,6 +2441,7 @@ OdinAgent::add_handlers()
   add_write_handler("handler_update_signal_strength", write_handler, handler_update_signal_strength);
   add_write_handler("signal_strength_offset", write_handler, handler_signal_strength_offset);
   add_write_handler("channel_switch_announcement", write_handler, handler_channel_switch_announcement);
+  add_write_handler("scan_client", write_handler, handler_scan_client);
 }
 
 /* This debug function prints info about clients */
@@ -2455,6 +2591,33 @@ void misc_thread(Timer *timer, void *data){
 
     timer->reschedule_after_sec(RESCHEDULE_INTERVAL_GENERAL);
 
+}
+
+/*Miscellaneous*/
+int
+OdinAgent::convert_frequency_to__channel(int freq) {
+    if (freq >= 2412 && freq <= 2484) {
+        int chan = (freq - 2412) / 5 + 1;
+        return chan;
+    } else if (freq >= 5170 && freq <= 5825) {
+        int chan = (freq - 5170) / 5 + 34;
+        return chan;
+    } else {
+        return -1;
+    }
+}
+
+int
+OdinAgent::convert_channel_to_frequency(int chan) {
+    if (chan >= 1 && chan <= 14) {
+        int freq = 5 * (chan - 1) + 2412;
+        return freq;
+    } else if (chan >= 34 && chan <= 165) {
+        int freq = 5 * (chan - 34) + 5170;
+        return freq;
+    } else {
+        return -1;
+    }
 }
 
 

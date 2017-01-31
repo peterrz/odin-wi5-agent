@@ -37,7 +37,7 @@ if (len(sys.argv) != 14):
     print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
     print ''
     print 'Example:'
-    print '$ python %s X 50 XX:XX:XX:XX:XX:XX 192.168.1.X 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra odin-unizar 192.168.1.Y L MM N P 0 > agent.click' %(sys.argv[0])
+    print '$ python agent-click-file-gen.py 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 > agent.cli' %(sys.argv[0])
     print ''
     print 'and then run the .click file you have generated'
     print 'click$ ./bin/click agent.click'
@@ -51,8 +51,8 @@ ODIN_MASTER_IP = sys.argv[4]
 ODIN_MASTER_PORT = sys.argv[5]
 DEBUGFS_FILE = sys.argv[6]
 SSIDAGENT = sys.argv[7]
-DEFAULT_GW = sys.argv[8]			#the IP address of the Access Point.
-AP_UNIQUE_IP = sys.argv[8]			# IP address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
+DEFAULT_GW = sys.argv[8]		#the IP address of the Access Point.
+AP_UNIQUE_IP = sys.argv[8]		# IP address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
 DEBUG_CLICK = int(sys.argv[9])
 DEBUG_ODIN = int(sys.argv[10])
 TX_RATE = int(sys.argv[11])
@@ -61,22 +61,24 @@ HIDDEN = int(sys.argv[13])
 
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in monitor mode. e.g. mon
-TAP_INTERFACE_NAME = "ap"			# name of the TAP device that Click will create in the 
-STA_IP = "192.168.1.11"				# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
+TAP_INTERFACE_NAME = "ap"		# name of the TAP device that Click will create in the 
+STA_IP = "192.168.1.11"			# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
 STA_MAC = "74:F0:6D:20:D4:74"		# MAC address of the STA in the LVAP tuple. It only works for a single client without DHCP
 
 print '''
 // This is the scheme:
 //
 //            TAP interface 'ap' in the machine that runs Click
-//             | ^
-// from host   | |   to host
-//             v |
-//            click
-//             | ^
-// to device   | |   to device 
-//             V |
-//            'mon0' interface in the machine that runs Click. Must be in monitor mode
+//                   | ^
+// from host         | |      to host
+//                   v |
+//             --------------
+//            |    click     |
+//             --------------
+//             | ^        | ^
+// to device   | |        | | to device 
+//             V |        V |
+//            'mon0'     'mon1'    interfaces in the machine that runs Click. Must be in monitor mode
 //
 '''
 
@@ -181,6 +183,18 @@ from_dev :: FromDevice(%s0, HEADROOM 50)
   -> dupe :: WifiDupeFilter()	// Filters out duplicate 802.11 packets based on their sequence number
 								// click/elements/wifi/wifidupefilter.hh
   -> [0]odinagent
+''' % ( NETWORK_INTERFACE_NAMES )
+
+print '''
+// ----------------Packets coming up (from the STA to the AP) go to the input 0 of the Odin Agent
+from_dev1 :: FromDevice(%s1, HEADROOM 50)
+  -> RadiotapDecap()
+  -> ExtraDecap()
+  -> phyerr_filter1 :: FilterPhyErr()
+  -> tx_filter1 :: FilterTX()
+  -> dupe1 :: WifiDupeFilter()	// Filters out duplicate 802.11 packets based on their sequence number
+								// click/elements/wifi/wifidupefilter.hh
+  -> [2]odinagent
 ''' % ( NETWORK_INTERFACE_NAMES )
 
 print '''
