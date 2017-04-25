@@ -47,7 +47,7 @@ public:
 
   // From Click
   const char *class_name() const	{ return "OdinAgent"; }
-  const char *port_count() const  { return "2/4"; }
+  const char *port_count() const  { return "3/4"; }
   const char *processing() const  { return PUSH; }
   int initialize(ErrorHandler *); // initialize element
   int configure(Vector<String> &, ErrorHandler *);
@@ -55,6 +55,9 @@ public:
   void run_timer(Timer *timer);
   void push(int, Packet *);
 
+  /*Miscellaneous*/
+  int convert_frequency_to__channel(int freq);
+  int convert_channel_to_frequency(int chan);
 
   // Extend this struct to add
   // new per-sta VAP state
@@ -131,6 +134,7 @@ public:
     handler_update_signal_strength,
     handler_signal_strength_offset,
     handler_channel_switch_announcement,
+	handler_scan_client,
   };
 
   // Tx and Rx-stats about stations
@@ -139,17 +143,14 @@ public:
     int _rate;
     int _noise;
     int _signal;
-		int _len_pkt;
-
-		int _packets;					//number of packets
-		double _avg_signal;		//average value of the signal
-		double _avg_rate;			//average rate of the packets
-		double _avg_len_pkt;	//average length of the packets
-		double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
-
-		Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
+	int _len_pkt;
+	int _packets;					//number of packets
+	double _avg_signal;		//average value of the signal
+	double _avg_rate;			//average rate of the packets
+	double _avg_len_pkt;	//average length of the packets
+	double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
+	Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
     Timestamp _time_last_packet;		//timestamp of the last packet included in the statistics
-
     StationStats() {
       memset(this, 0, sizeof(*this));
     }
@@ -180,12 +181,16 @@ public:
   int _interval_ms_default; // Beacon interval: normal mode timer
   int _interval_ms_burst; // Beacon interval: burst mode timer, used during channel switch
   int _channel; // Channel to be shared by all VAPs.
+  int _channel_aux; // Channel to be used for scanning.
   int _new_channel; // New channel for CSA
   bool _csa; // For channel switch announcement
   int _count_csa_beacon; // For channel switch announcement
   int _count_csa_beacon_default; // Default number of beacons before channel switch
   int _csa_count; // For _csa FALSE-->TRUE
   int _csa_count_default;
+  bool _active_scanning; // To active scanning
+  EtherAddress _scanned_sta_mac; // MAC to scan
+  int _scanning_result; // Result for scanning
   Vector<Subscription> _subscription_list;
   //bool _debug;
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed
@@ -194,7 +199,7 @@ public:
 
 private:
   void compute_bssid_mask ();
-	void update_tx_stats(Packet *p);
+  void update_tx_stats(Packet *p);
   void update_rx_stats(Packet *p);
   EtherAddress _hw_mac_addr;
   class AvailableRates *_rtable;
@@ -208,6 +213,7 @@ private:
   int _tx_rate;
   int _tx_power;
   int _hidden;
+
 };
 
 
