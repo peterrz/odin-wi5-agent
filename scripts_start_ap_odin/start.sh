@@ -1,11 +1,19 @@
 #!/bin/sh
 
+# In order to adapt this script to your setup, you must:
+# - modify the IP address of the controller (CTLIP)
+# - adapt the names of your wireless devices: wlan0-phy0-mon0; wlan1-phy1-mon1
+# - add some routes if you need them (route add)
+# - mount the USB (or not) if you need (or not) to use some files from it
+# - modify the name and the route of the .cli script to be used
+# - modify the port used by OpenFlow (6633 by default)
+
 ## Variables
 echo "Setting variables"
-CTLIP=192.168.1.129 # Controller IP
-SW=br0
-DPPORTS="eth1.2" # Ports for data plane
-VSCTL="ovs-vsctl"
+CTLIP=192.168.1.129 # Controller IP address
+SW=br0              # Name of the bridge
+DPPORTS="eth1.2"    # Port for data plane
+VSCTL="ovs-vsctl"   # Command to be used to invoke openvswitch
 
 ## Setting interfaces
 echo "Setting interfaces"
@@ -27,7 +35,7 @@ route add -net 155.210.156.0 netmask 255.255.255.0 gw 155.210.157.254 eth0
 #route del default gw 155.210.157.254
 #route add default gw 192.168.1.131
 
-## Mount USB
+## Mount USB if you need it (e.g. for putting the Click binary there)
 echo "Mounting USB"
 if [ ! -d "/mnt/usb" ]; then
   mkdir -p /mnt/usb
@@ -51,7 +59,7 @@ fi
 if [ -f "/var/run/ovs-vswitchd.pid" ]; then
   rm /var/run/ovs-vswitchd.pid
 fi
-echo "Lanching OVS"
+echo "Launching OVS"
 /etc/init.d/openvswitch start
 $VSCTL add-br $SW # Create the bridge
 ifconfig $SW up # In OpenWrt 15.05 the bridge is created down
@@ -63,14 +71,16 @@ for i in $DPPORTS ; do # Including ports to OVS
 done
 
 ## Launch click
-echo "Lanching Click"
+echo "Launching Click"
 cd /mnt/usb
 sleep 1
 ./click aagent9.cli &
 sleep 1
-# Add ap to OVS
-echo "Adding Click interface to OVS"
-ifconfig ap up # Adding ap interface (click Interface) to OVS
+# From this moment, a new tap interface called 'ap' will be created by Click
+
+# Add 'ap' to OVS
+echo "Adding Click interface 'ap' to OVS"
+ifconfig ap up # Adding 'ap' interface (click Interface) to OVS
 $VSCTL add-port $SW ap
 sleep 1
 
