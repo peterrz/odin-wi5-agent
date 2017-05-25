@@ -40,10 +40,10 @@ void cleanup_lvap(Timer *timer, void *);
 
 int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of old clients will be removed
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
-int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
-int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
+int RESCHEDULE_INTERVAL_STATS = 30; //time interval [sec] after which general_timer will be rescheduled
+int THRESHOLD_REMOVE_LVAP = 30; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
 uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
-int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
+int MULTICHANNEL_AGENTS = 1; //Odin environment with agents in several channels
 
 OdinAgent::OdinAgent()
 : _mean(0),
@@ -1958,71 +1958,67 @@ OdinAgent::read_handler(Element *e, void *user_data)
 		// handler for transmission statistics
 		case handler_txstat: {
 
-			//Timestamp now = Timestamp::now();
-			Vector<EtherAddress> buf;
+		OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
+		Timestamp stats_time;
 
 			// the controller will get the tx statistics of all the STAs associated to this AP
 			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
-			for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
-						iter.live(); iter++) {
+		for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
+					iter.live(); iter++) {
 
-				OdinAgent::StationStats n = iter.value();
-				//Timestamp age = now - n._time_last_packet;
-
-				sa << iter.key().unparse_colon();
-        
-				sa << " packets:" << n._packets;
-				sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-				sa << " avg_signal:" << n._avg_signal; // signal in dBm
-				sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-				sa << " air_time:" << n._air_time; // time in seconds
-
-				sa << " first_received:" << n._time_first_packet; // time in long format
-				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+			OdinAgent::StationStats n = iter.value();
 		
-				// sa << " age:" << age << "\n";
-				buf.push_back (iter.key());
-			}	
-	  
-			for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
-			 agent->_tx_stats.erase (*iter);
-      
-			break;
+			sa << iter.key().unparse_colon();
+        
+			sa << " packets:" << n._packets;
+			sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+			sa << " avg_signal:" << n._avg_signal; // signal in dBm
+			sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+			sa << " air_time:" << n._air_time; // time in seconds
+
+			sa << " first_received:" << n._time_first_packet; // time in long format
+			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+		
+			stats_time = n._time_last_packet;
+			agent->_tx_stats.find(iter.key()).value() = reset_stats;
+			agent->_tx_stats.find(iter.key()).value()._time_first_packet = stats_time;
+			agent->_tx_stats.find(iter.key()).value()._time_last_packet = stats_time;
+		}	
+	  	
+		break;
     }
 
 		// handler for reception statistics
     case handler_rxstat: {
-      //Timestamp now = Timestamp::now();
-			Vector<EtherAddress> buf;
+
+      OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
+	  Timestamp stats_time;
 
 			// the controller will get the rx statistics of all the STAs associated to this AP
 			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
-      for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_rx_stats.begin();
+		for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_rx_stats.begin();
           iter.live(); iter++) {
 
-        OdinAgent::StationStats n = iter.value();
-        //Timestamp age = now - n._time_last_packet;
+			OdinAgent::StationStats n = iter.value();
 
-        sa << iter.key().unparse_colon();
+			sa << iter.key().unparse_colon();
         
-				sa << " packets:" << n._packets;
-				sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-        sa << " avg_signal:" << n._avg_signal; // signal in dBm
-        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-        sa << " air_time:" << n._air_time; // time in seconds
+			sa << " packets:" << n._packets;
+			sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+			sa << " avg_signal:" << n._avg_signal; // signal in dBm
+			sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+			sa << " air_time:" << n._air_time; // time in seconds
 
-				sa << " first_received:" << n._time_first_packet; // time in long format
-				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
-		
-        // sa << " age:" << age << "\n";
-				buf.push_back (iter.key());
-      }	
-	  
-			// as I have sent the statistics, I delete the records of all the MACs read
-			for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
-			 agent->_rx_stats.erase (*iter);
-      
-	  break;
+			sa << " first_received:" << n._time_first_packet; // time in long format
+			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+
+			stats_time = n._time_last_packet;
+			agent->_rx_stats.find(iter.key()).value() = reset_stats;
+			agent->_rx_stats.find(iter.key()).value()._time_first_packet = stats_time;
+			agent->_rx_stats.find(iter.key()).value()._time_last_packet = stats_time;
+		}	    
+
+		break;
     }
 
     case handler_subscriptions: {
@@ -2532,7 +2528,8 @@ OdinAgent::print_stations_state()
 	}
 }
 
-/* This function erases the rx_stats of old clients */
+
+/* This function erases old statistics from station not associated. It also erases old lvaps from inactive stations */
 void
 cleanup_lvap (Timer *timer, void *data)
 {
@@ -2540,18 +2537,21 @@ cleanup_lvap (Timer *timer, void *data)
     OdinAgent *agent = (OdinAgent *) data;
     Vector<EtherAddress> buf;
 
-    // Clear out old rxstat entries.
+
     for (HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = agent->_rx_stats.begin();
     iter.live(); iter++){
 
+       // Clear out rxstat entries from station not associated
+		if (agent->_sta_mapping_table.find(iter.key()) == agent->_sta_mapping_table.end()) {
+			buf.push_back (iter.key());
+			continue;
+		}
+
         Timestamp now = Timestamp::now();
         Timestamp age = now - iter.value()._time_last_packet;
-
-        if (age.sec() > THRESHOLD_OLD_STATS){
-            buf.push_back (iter.key());
-        }
+		
         //If out station has been inactive longer than the given threshold we remove the lvap and info at the master, then the stats will be removed too
-        if(age > THRESHOLD_REMOVE_LVAP && agent->_sta_mapping_table.find(iter.key()) != agent->_sta_mapping_table.end()){
+        if(age.sec() > THRESHOLD_REMOVE_LVAP){
 
             // Notify the master to remove client info and lvap, then agent clears the lvap
             StringAccum sa;
@@ -2573,14 +2573,17 @@ cleanup_lvap (Timer *timer, void *data)
         if(agent->_sta_mapping_table.find(*iter) != agent->_sta_mapping_table.end())
             continue;
 
-				if (agent->_debug_level % 10 > 1)
+		if (agent->_debug_level % 10 > 1)
 					fprintf(stderr, "[Odinagent.cc]   station with MAC addr: %s\n", iter->unparse_colon().c_str());
         agent->_rx_stats.erase (*iter);
+		agent->_tx_stats.erase (*iter);
     }
 
-    agent->_packet_buffer.clear();
+    //agent->_packet_buffer.clear();
     timer->reschedule_after_sec(RESCHEDULE_INTERVAL_STATS);
 }
+
+
 
 /* Thread for general purpose (i.e. print debug info about them)*/
 void misc_thread(Timer *timer, void *data){
