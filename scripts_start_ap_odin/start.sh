@@ -8,6 +8,11 @@
 # - modify the name and the route of the .cli script to be used
 # - modify the port used by OpenFlow (6633 by default)
 
+# The order is:
+# 1.- Launch this script in all the APs. You will see a message "Now you can launch the controller and press Enter"
+# 2.- Launch the Wi-5 odin controller
+# 3.- Press ENTER on each of the APs
+
 ## Variables
 echo "Setting variables"
 CTLIP=192.168.1.129 # Controller IP address
@@ -21,10 +26,12 @@ ifconfig wlan0 down
 ifconfig wlan1 down
 iw phy phy0 interface add mon0 type monitor
 iw phy phy1 interface add mon1 type monitor
-iw phy phy0 set retry short 4
+#iw phy phy0 set retry short 4
 #iw dev wlan0 set channel 1
 ifconfig mon0 up
 ifconfig mon1 up
+ifconfig mon0 mtu 1532
+ifconfig mon1 mtu 1532
 ifconfig wlan0 up
 ifconfig wlan1 up
 # add this route in order to permit control from Unizar networks
@@ -46,6 +53,9 @@ mount /dev/sda1 /mnt/usb/
 echo "Restarting OpenvSwitch"
 /etc/init.d/openvswitch stop
 sleep 1
+# The next line is added in order to start the controller after stopping openvswitch
+read -p "Now you can launch the Wi-5 odin controller and press Enter" pause
+
 echo "Cleaning DB"
 if [ -d "/etc/openvswitch" ]; then
   rm -r /etc/openvswitch
@@ -84,7 +94,7 @@ ifconfig ap up # Adding 'ap' interface (click Interface) to OVS
 $VSCTL add-port $SW ap
 sleep 1
 
-## OVS Rules
-# DHCP rules needed by odin-wi5 controller
+## OpenVSwitch Rules
+# OpenFlow rules needed to make it possible for DHCP traffic to arrive to the Wi-5 odin controller
 ovs-ofctl add-flow br0 in_port=2,dl_type=0x0800,nw_proto=17,tp_dst=67,actions=output:1,CONTROLLER
 ovs-ofctl add-flow br0 in_port=1,dl_type=0x0800,nw_proto=17,tp_dst=68,actions=output:CONTROLLER,2
