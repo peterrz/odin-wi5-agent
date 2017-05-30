@@ -186,8 +186,6 @@ public:
   bool _csa; // For channel switch announcement
   int _count_csa_beacon; // For channel switch announcement
   int _count_csa_beacon_default; // Default number of beacons before channel switch
-  int _csa_count; // For _csa FALSE-->TRUE
-  int _csa_count_default;
   bool _active_scanning; // To active scanning
   EtherAddress _scanned_sta_mac; // MAC to scan
   int _scanning_result; // Result for scanning
