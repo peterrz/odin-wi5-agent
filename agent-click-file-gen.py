@@ -41,7 +41,7 @@ if (len(sys.argv) != 17):
     print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds)'
     print ''
     print 'Example:'
-    print '$ python agent-click-file-gen.py 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 > agent.cli' %(sys.argv[0])
+    print '$ python agent-click-file-gen.py 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
     print ''
     print 'and then run the .click file you have generated'
     print 'click$ ./bin/click agent.click'
