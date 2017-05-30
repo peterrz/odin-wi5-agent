@@ -38,12 +38,11 @@ CLICK_DECLS
 void misc_thread(Timer *timer, void *);
 void cleanup_lvap(Timer *timer, void *);
 
-int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of old clients will be removed
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 30; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 30; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
 uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
-int MULTICHANNEL_AGENTS = 1; //Odin environment with agents in several channels
+
 
 OdinAgent::OdinAgent()
 : _mean(0),
@@ -59,7 +58,10 @@ OdinAgent::OdinAgent()
   _ssid_agent_string(""),
   _tx_rate(0),
   _tx_power(0),
-  _hidden(0)	
+  _hidden(0),
+  _multichannel_agents(1),
+  _interval_ms_default(100),          // Inter-Beacon Interval for normal mode
+  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode  
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -109,16 +111,12 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms_default = 100; // BI for normal mode
-  _interval_ms_burst = 10; // BI value for burst mode
-  _interval_ms = _interval_ms_default;
+  // Default values
   _channel = 6;
   _channel_aux = 0; // Initialized in 0, so it will change the channel the first time
   _new_channel = 1;
   _csa = false; //
-  _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
-  _csa_count = _csa_count_default; 
-  _count_csa_beacon_default = 4; // Number of beacons before channel switch
+  _count_csa_beacon_default = 4; // Number of beacons, with CSA element, sent by the AP before channel switch
   _count_csa_beacon = _count_csa_beacon_default;
   _active_scanning = false;
   _scanned_sta_mac = EtherAddress();
@@ -136,8 +134,14 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("TX_RATE", _tx_rate)		// as we are not yet able to do per-packet TPC, we use a fixed transmission rate, and we must read it to perform the calculations of the statistics
   .read_m("TX_POWER", _tx_power)	// as we are not yet able to do per-packet TPC, we use a fixed transmission power, and we must read it to perform the calculations of the statistics
   .read_m("HIDDEN", _hidden)
+  .read_m("MULTICHANNEL_AGENTS", _multichannel_agents)
+  .read_m("DEFAULT_BEACON_INTERVAL", _interval_ms_default)
+  .read_m("BURST_BEACON_INTERVAL", _interval_ms_burst)
   .complete() < 0)
   return -1;
+
+  // Put the correct value in the variable after reading
+  _interval_ms = _interval_ms_default;
 
   return 0;
 }
@@ -1763,7 +1767,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
   if(_subscription_list.size() == 0)
     return;
 
-    if (MULTICHANNEL_AGENTS == 1) {
+    if (_multichannel_agents == 1) {
        // if the MAC is not in the mapping table, end the function
 	   if (_sta_mapping_table.find (src) == _sta_mapping_table.end()) 
 		      return;

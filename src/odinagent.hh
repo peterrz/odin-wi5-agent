@@ -196,6 +196,7 @@ public:
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed
   HashTable<EtherAddress, String> _packet_buffer;
   void match_against_subscriptions(StationStats stats, EtherAddress src);
+  int _multichannel_agents;
 
 private:
   void compute_bssid_mask ();
