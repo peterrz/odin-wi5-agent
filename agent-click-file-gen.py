@@ -13,10 +13,10 @@
 
 import sys
 
-if (len(sys.argv) != 14):
+if (len(sys.argv) != 17):
     print 'Usage:'
     print ''
-    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN>' %(sys.argv[0])
+    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN> <MULTICHANNEL_AGENTS> <DEFAULT_BEACON_INTERVAL> <BURST_BEACON_INTERVAL>' %(sys.argv[0])
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
@@ -35,6 +35,10 @@ if (len(sys.argv) != 14):
     print '          for getting the value, use e.g. $# iw dev mon0 info'
     print 'HIDDEN: If HIDDEN is 1, then the AP will only send responses to the active scans targetted to the SSID of Odin'
     print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
+    print 'MULTICHANNEL_AGENTS: If MULTICHANNEL_AGENTS is 1, it means that the APs can be in different channels'
+    print '                     If MULTICHANNEL_AGENTS is 0, it means that all the APs are in the same channel'
+    print 'DEFAULT_BEACON_INTERVAL: Time between beacons (in milliseconds)'
+    print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds)'
     print ''
     print 'Example:'
     print '$ python agent-click-file-gen.py 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 > agent.cli' %(sys.argv[0])
@@ -58,12 +62,15 @@ DEBUG_ODIN = int(sys.argv[10])
 TX_RATE = int(sys.argv[11])
 TX_POWER = int(sys.argv[12])
 HIDDEN = int(sys.argv[13])
+MULTICHANNEL_AGENTS = int(sys.argv[14])
+DEFAULT_BEACON_INTERVAL = int(sys.argv[15])
+BURST_BEACON_INTERVAL = int(sys.argv[16])
 
 # Set the value of some constants
-NETWORK_INTERFACE_NAMES = "mon"		# beginning of the network interface names in monitor mode. e.g. mon
-TAP_INTERFACE_NAME = "ap"		# name of the TAP device that Click will create in the 
-STA_IP = "192.168.1.11"			# IP address of the STA in the LVAP tuple. It only works for a single client without DHCP
-STA_MAC = "74:F0:6D:20:D4:74"		# MAC address of the STA in the LVAP tuple. It only works for a single client without DHCP
+NETWORK_INTERFACE_NAMES = "mon"		 # beginning of the network interface names in monitor mode. e.g. mon
+TAP_INTERFACE_NAME = "ap"		       # name of the TAP device that Click will create in the Access Point
+STA_IP = "192.168.1.11"			       # IP address of the STA in the LVAP tuple. It is only necessary for a single client without DHCP
+STA_MAC = "74:F0:6D:20:D4:74"		   # MAC address of the STA in the LVAP tuple. It is only necessary for a single client without DHCP
 
 print '''
 // This is the scheme:
@@ -84,8 +91,8 @@ print '''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
-odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s)
-''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN )
+odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s)
+''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL)
 
 print '''
 // send a ping to odinsocket every 2 seconds
