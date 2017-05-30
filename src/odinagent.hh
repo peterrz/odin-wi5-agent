@@ -121,7 +121,7 @@ public:
     handler_num_slots,
     handler_add_vap,
     handler_set_vap,
-	handler_txstat,
+	  handler_txstat,
     handler_rxstat,
     handler_remove_vap,
     handler_channel,
@@ -134,7 +134,7 @@ public:
     handler_update_signal_strength,
     handler_signal_strength_offset,
     handler_channel_switch_announcement,
-	handler_scan_client,
+	  handler_scan_client,
   };
 
   // Tx and Rx-stats about stations
