@@ -26,8 +26,6 @@ ifconfig wlan0 down
 ifconfig wlan1 down
 iw phy phy0 interface add mon0 type monitor
 iw phy phy1 interface add mon1 type monitor
-#iw phy phy0 set retry short 4
-#iw dev wlan0 set channel 1
 ifconfig mon0 up
 ifconfig mon1 up
 ifconfig mon0 mtu 1532
