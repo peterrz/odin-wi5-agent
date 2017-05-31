@@ -41,7 +41,7 @@ if (len(sys.argv) != 17):
     print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds). Recommended values: 5-10'
     print ''
     print 'Example:'
-    print '$ python %s 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
+    print '$ python %s 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 0 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
     print ''
     print 'and then run the .cli file you have generated'
     print 'click$ ./bin/click agent.cli'
@@ -90,8 +90,8 @@ print '''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
-odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s)
-''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL)
+odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_CLICK %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s)
+''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_CLICK, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL)
 
 print '''// send a ping to odinsocket every 2 seconds
 TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
