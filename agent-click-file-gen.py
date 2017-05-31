@@ -1,13 +1,13 @@
 #!/usr/bin/python
 
-# This script creates a .click file which can then be run using the click modular router.
+# This script creates a .cli file which can then be run using the Click modular router.
 # http://read.cs.ucla.edu/click/click
 # https://github.com/kohler/click
 #
-# it requires that you have installed the OdinAgent module within your click installation
+# it requires that you have installed the odinagent.cc module within your Click installation
 # https://github.com/Wi5/odin-wi5-agent/tree/master/src
 #
-# it also requires that you have patched the ath9k driver. This is the only driver supported currently
+# it also requires that you have patched the ath9k driver.
 # About the driver patch see:
 # https://github.com/Wi5/odin-wi5/tree/master/odin-patch-driver-ath9k
 
