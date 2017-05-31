@@ -95,8 +95,8 @@ fi
 mount /dev/sda1 /mnt/usb/
 
 cd /mnt/usb
-./click-al agent10.cli | click &    # This makes the alignment and calls Click at the same time
-#./click aagent9.cli &              # Old command, which required an aligned version of the .cli file
+./click < click-al agent.cli &    # This makes the alignment and calls Click at the same time
+#./click aagent.cli &             # Old command, which required an aligned version of the .cli file
 sleep 1
 # From this moment, a new tap interface called 'ap' will be created by Click
 
