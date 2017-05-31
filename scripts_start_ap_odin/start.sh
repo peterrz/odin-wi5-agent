@@ -34,20 +34,16 @@ ifconfig mon0 mtu 1532
 ifconfig mon1 mtu 1532
 ifconfig wlan0 up
 ifconfig wlan1 up
-# add this route in order to permit control from Unizar networks
+
+## Routes
+# add these routes in order to permit control from other networks (this is very particular of Unizar)
 # traffic from these networks will not go through the default gateway
 route add -net 155.210.158.0 netmask 255.255.255.0 gw 155.210.157.254 eth0
 route add -net 155.210.156.0 netmask 255.255.255.0 gw 155.210.157.254 eth0
+
 # set the default gateway where masquerading is being performed
 #route del default gw 155.210.157.254
 #route add default gw 192.168.1.131
-
-## Mount USB if you need it (e.g. for putting the Click binary there)
-echo "Mounting USB"
-if [ ! -d "/mnt/usb" ]; then
-  mkdir -p /mnt/usb
-fi
-mount /dev/sda1 /mnt/usb/
 
 ## OVS
 echo "Restarting OpenvSwitch"
@@ -56,7 +52,8 @@ sleep 1
 # The next line is added in order to start the controller after stopping openvswitch
 read -p "Now you can launch the Wi-5 odin controller and press Enter" pause
 
-echo "Cleaning DB"
+# Clean the OpenVSwitch database
+echo "Cleaning OpenVSwitch database"
 if [ -d "/etc/openvswitch" ]; then
   rm -r /etc/openvswitch
 fi
@@ -69,29 +66,46 @@ fi
 if [ -f "/var/run/ovs-vswitchd.pid" ]; then
   rm /var/run/ovs-vswitchd.pid
 fi
-echo "Launching OVS"
+
+# Launch OpenVSwitch
+echo "Launching OpenVSwitch"
 /etc/init.d/openvswitch start
-$VSCTL add-br $SW # Create the bridge
+
+# Create the bridge
+$VSCTL add-br $SW
 ifconfig $SW up # In OpenWrt 15.05 the bridge is created down
-$VSCTL set-controller $SW tcp:$CTLIP:6633 # Configure the OpenFlow Controller.
-for i in $DPPORTS ; do # Including ports to OVS
-    PORT=$i
-    ifconfig $PORT up
-    $VSCTL add-port $SW $PORT
+
+# Configure the OpenFlow Controller
+$VSCTL set-controller $SW tcp:$CTLIP:6633
+
+# Add the data plane ports to OpenVSwitch
+for i in $DPPORTS ; do
+  PORT=$i
+  ifconfig $PORT up
+  $VSCTL add-port $SW $PORT
 done
 
 ## Launch click
+sleep 3
 echo "Launching Click"
+
+# Mount USB if you need it for putting the Click ('click') and Click-align ('click-al') binaries
+echo "Mounting USB"
+if [ ! -d "/mnt/usb" ]; then
+  mkdir -p /mnt/usb
+fi
+mount /dev/sda1 /mnt/usb/
+
 cd /mnt/usb
-sleep 1
-./click aagent9.cli &
+./click-al agent10.cli | click &    # This makes the alignment and calls Click at the same time
+#./click aagent9.cli &              # Old command, which required an aligned version of the .cli file
 sleep 1
 # From this moment, a new tap interface called 'ap' will be created by Click
 
-# Add 'ap' to OVS
+# Add the 'ap' interface to OpenVSwitch
 echo "Adding Click interface 'ap' to OVS"
-ifconfig ap up # Adding 'ap' interface (click Interface) to OVS
-$VSCTL add-port $SW ap
+ifconfig ap up            # Putting the interface 'ap' up
+$VSCTL add-port $SW ap    # Adding 'ap' interface (click Interface) to OVS
 sleep 1
 
 ## OpenVSwitch Rules

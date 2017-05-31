@@ -20,13 +20,13 @@ if (len(sys.argv) != 17):
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
-    print 'MAC_ADDR_AP: the MAC of the wireless interface mon0 of the AP. e.g. 74-F0-6E-20-D4-74'
+    print 'MAC_ADDR_AP: the MAC of the wireless interface mon0 of the AP. e.g. 60:E3:27:4F:C7:E1'
     print 'ODIN_MASTER_IP is the IP of the openflow controller where Odin master is running'
     print 'ODIN_MASTER_PORT should be 2819 by default'
     print 'DEBUGFS_FILE is the path of the bssid_extra file created by the ath9k patch'	
     print '             it can be /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra'
     print 'SSIDAGENT is the name of the SSID of this Odin agent'
-    print 'ODIN_AGENT_IP is the IP address of the AP where this script is running (the IP used for communicating with the controller)'
+    print 'ODIN_AGENT_IP is the IP address of the AP where this script is running (the control plane ethernet IP, used for communicating with the controller)'
     print 'DEBUG_CLICK: "0" no info displayed; "1" only basic info displayed; "2" all the info displayed'
     print 'DEBUG_ODIN: "00" no info displayed; "01" only basic info displayed; "02" all the info displayed; "11" or "12": demo mode (more separators)'
     print 'TX_RATE: it is an integer, and the rate is obtained by its product with 500kbps. e.g. if it is 108, this means 108*500kbps = 54Mbps'
@@ -37,26 +37,26 @@ if (len(sys.argv) != 17):
     print '        If HIDDEN is 0, then the AP will also send responses to active scans with an empty SSID'
     print 'MULTICHANNEL_AGENTS: If MULTICHANNEL_AGENTS is 1, it means that the APs can be in different channels'
     print '                     If MULTICHANNEL_AGENTS is 0, it means that all the APs are in the same channel'
-    print 'DEFAULT_BEACON_INTERVAL: Time between beacons (in milliseconds)'
-    print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds)'
+    print 'DEFAULT_BEACON_INTERVAL: Time between beacons (in milliseconds). Recommended values: 20-100'
+    print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds). Recommended values: 5-10'
     print ''
     print 'Example:'
-    print '$ python agent-click-file-gen.py 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
+    print '$ python %s 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 1 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
     print ''
-    print 'and then run the .click file you have generated'
-    print 'click$ ./bin/click agent.click'
+    print 'and then run the .cli file you have generated'
+    print 'click$ ./bin/click agent.cli'
     sys.exit(0)
 
 # Read the arguments
 AP_CHANNEL = sys.argv[1]
 QUEUE_SIZE = sys.argv[2]
-AP_UNIQUE_BSSID = sys.argv[3]		# MAC address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
+AP_UNIQUE_BSSID = sys.argv[3]		    # FIXME. It seems it does not matter. Remove this parameter?
 ODIN_MASTER_IP = sys.argv[4]
 ODIN_MASTER_PORT = sys.argv[5]
 DEBUGFS_FILE = sys.argv[6]
 SSIDAGENT = sys.argv[7]
-DEFAULT_GW = sys.argv[8]		#the IP address of the Access Point.
-AP_UNIQUE_IP = sys.argv[8]		# IP address of the wlan0 interface of the router where Click runs (in monitor mode). It seems it does not matter.
+DEFAULT_GW = sys.argv[8]
+AP_UNIQUE_IP = sys.argv[8]		      # FIXME. It seems this parameter does not matter. Remove this line?
 DEBUG_CLICK = int(sys.argv[9])
 DEBUG_ODIN = int(sys.argv[10])
 TX_RATE = int(sys.argv[11])
@@ -65,7 +65,7 @@ HIDDEN = int(sys.argv[13])
 MULTICHANNEL_AGENTS = int(sys.argv[14])
 DEFAULT_BEACON_INTERVAL = int(sys.argv[15])
 BURST_BEACON_INTERVAL = int(sys.argv[16])
-
+  
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		 # beginning of the network interface names in monitor mode. e.g. mon
 TAP_INTERFACE_NAME = "ap"		       # name of the TAP device that Click will create in the Access Point
@@ -85,17 +85,15 @@ print '''
 //             | ^        | ^
 // to device   | |        | | to device 
 //             V |        V |
-//            'mon0'     'mon1'    interfaces in the machine that runs Click. Must be in monitor mode
-//
-'''
+//            'mon0'     'mon1'    interfaces in the machine that runs Click. They must be in monitor mode
+//'''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
 odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s)
 ''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL)
 
-print '''
-// send a ping to odinsocket every 2 seconds
+print '''// send a ping to odinsocket every 2 seconds
 TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 ''' % (ODIN_MASTER_IP, ODIN_MASTER_PORT)
 
@@ -117,10 +115,9 @@ TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
 #of router chatter traffic. The "server" (that is, the ChatterSocket element) 
 #simply echoes any messages generated by the router configuration to any 
 #existing clients.
-print '''
-// output 3 of odinagent goes to odinsocket
+print '''// output 3 of odinagent goes to odinsocket
 odinagent[3] -> odinsocket
-rates :: AvailableRates(DEFAULT 12 18 24 36 48 72 96 108);	// wifi rates in multiples of 500kbps
+rates :: AvailableRates(DEFAULT 12 18 24 36 48 72 96 108);	// wifi rates in multiples of 500kbps. This will be announced in the beacons sent by the AP
 control :: ControlSocket("TCP", 6777);
 chatter :: ChatterSocket("TCP", 6778);
 '''
@@ -175,10 +172,8 @@ q :: Queue(%s)
   -> to_dev :: ToDevice (%s0);
 ''' % (QUEUE_SIZE, TX_RATE, NETWORK_INTERFACE_NAMES )
 
-print '''
-odinagent[2]
-  -> q
-'''
+print '''  odinagent[2]
+  -> q'''
 
 print '''
 // ----------------Packets coming up (from the STA to the AP) go to the input 0 of the Odin Agent
@@ -189,8 +184,7 @@ from_dev :: FromDevice(%s0, HEADROOM 50)
   -> tx_filter :: FilterTX()
   -> dupe :: WifiDupeFilter()	// Filters out duplicate 802.11 packets based on their sequence number
 								// click/elements/wifi/wifidupefilter.hh
-  -> [0]odinagent
-''' % ( NETWORK_INTERFACE_NAMES )
+  -> [0]odinagent''' % ( NETWORK_INTERFACE_NAMES )
 
 print '''
 // ----------------Packets coming up (from the STA to the AP) go to the input 0 of the Odin Agent
@@ -201,13 +195,10 @@ from_dev1 :: FromDevice(%s1, HEADROOM 50)
   -> tx_filter1 :: FilterTX()
   -> dupe1 :: WifiDupeFilter()	// Filters out duplicate 802.11 packets based on their sequence number
 								// click/elements/wifi/wifidupefilter.hh
-  -> [2]odinagent
-''' % ( NETWORK_INTERFACE_NAMES )
+  -> [2]odinagent''' % ( NETWORK_INTERFACE_NAMES )
 
-print '''
-odinagent[0]
-  -> q
-''' 
+print '''odinagent[0]
+  -> q''' 
 
 print '''
 // Data frames
