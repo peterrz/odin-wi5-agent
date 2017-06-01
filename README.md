@@ -25,4 +25,4 @@ agent-click-file-gen.py
 Click file generator for the agent. Configure and use this script
 to generate the appropriate Odin agent click file.
 
-If you run `$python agent-click-file-gen.py` you will see an example of how to use the python command, and the meaning of each parameter.
+If you run `$python agent-click-file-gen.py` you will see an example of how to use the python script, and the meaning of each parameter.
