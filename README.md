@@ -3,20 +3,17 @@ Odin agent
 
 We are adding interesting info in this wiki: https://github.com/Wi5/odin-wi5/wiki
 
-Odin agents run on physical APs, and are implemented as Click elements. Agents contain the logic for the Wi-Fi split-MAC and LVAP handling. Agents also record information about clients using radiotap headers, and communicate with the Odin Master over the Odin control channel. The physical AP hosting the agent also requires a slightly modified Wi-Fi device driver to generate ACK frames for every LVAP that is hosted on the AP.
+Odin agents run on physical APs, and are implemented as Click elements. Agents contain the logic for the Wi-Fi split-MAC and LVAP handling. Agents also record information about clients using Radiotap headers, and communicate with the Odin Controller over the Odin control channel. The physical AP hosting the agent also requires a modified Wi-Fi device driver to generate ACK frames for every LVAP that is hosted on the AP.
 
 
 Source files for Odin agent:
 
 src/odinagent{.cc,.hh}
------------------
+----------------------
 
-These are the Click OdinAgent element files. They've only been
-tested in userspace mode so far. To build:
+These are the Click OdinAgent element files. They have only been tested in userspace mode.
 
-1. Add these files to <click>/elements/local/
-
-2. Build Click with the --enable-local and --enable-userspace flag.
+To build, follow the instructions in https://github.com/Wi5/odin-wi5/wiki/Cross-compiling-Click-Modular-Router-for-Odin
 
 
 agent-click-file-gen.py
