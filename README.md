@@ -19,7 +19,7 @@ To build, follow the instructions in https://github.com/Wi5/odin-wi5/wiki/Cross-
 agent-click-file-gen.py
 -----------------------
 
-Click file generator for the agent. Configure and use this script
-to generate the appropriate Odin agent click file.
+This is the `.cli` file generator for the agent. Configure and use this script
+to generate the appropriate Odin agent Click file.
 
 If you run `$python agent-click-file-gen.py` you will see an example of how to use the python script, and the meaning of each parameter.
