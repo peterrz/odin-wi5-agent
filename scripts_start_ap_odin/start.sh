@@ -108,5 +108,9 @@ sleep 1
 
 ## OpenVSwitch Rules
 # OpenFlow rules needed to make it possible for DHCP traffic to arrive to the Wi-5 odin controller
+# It may happen that 'eth1.2' is port 1 and 'ap' is port 2
 ovs-ofctl add-flow br0 in_port=2,dl_type=0x0800,nw_proto=17,tp_dst=67,actions=output:1,CONTROLLER
 ovs-ofctl add-flow br0 in_port=1,dl_type=0x0800,nw_proto=17,tp_dst=68,actions=output:CONTROLLER,2
+# It may happen that 'eth1.2' is port 2 and 'ap' is port 1
+ovs-ofctl add-flow br0 in_port=1,dl_type=0x0800,nw_proto=17,tp_dst=67,actions=output:2,CONTROLLER
+ovs-ofctl add-flow br0 in_port=2,dl_type=0x0800,nw_proto=17,tp_dst=68,actions=output:CONTROLLER,1
