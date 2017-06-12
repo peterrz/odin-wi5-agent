@@ -1694,9 +1694,7 @@ OdinAgent::push(int port, Packet *p)
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
 	if (_active_scanning) {
 	//if (true) { // For testing
-
-		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated \n");
-
+        
 		if (p->length() < sizeof(struct click_wifi)) {
 			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> killing packet \n");
 		  p->kill();
@@ -1704,28 +1702,38 @@ OdinAgent::push(int port, Packet *p)
 		}
 
 		struct click_wifi *w = (struct click_wifi *) p->data();
+        
 		EtherAddress src = EtherAddress(w->i_addr2);
-		if (src == _scanned_sta_mac) {
-			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> found packet for  %s\n", src.unparse_colon().c_str());
-			// Get station statistics
-			struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
-			// StationStats stat;
-			// HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
-			// if (it == _rx_stats.end())
-			//   stat = StationStats();
-			// else
-			//   stat = it.value();
 
-			// stat._rate = ceh->rate;
-			// stat._noise = ceh->silence;
-			// stat._signal = ceh->rssi + _signal_offset;
-			// stat._packets++;
-			// stat._last_received.assign_now();
-			_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
-			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
-		}
-		//_scanning_result = 200; // For testing
-		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result); // For testing
+        if (src.unparse_colon().c_str() == "00:00:00:00:00:00"){ // If there is not scan mac assigned
+                    
+            //fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: No Mac for scan assigned\n");
+                    
+        }else if(src == _scanned_sta_mac) {
+            if (_debug_level % 10 > 1)
+                fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> found packet for  %s\n", src.unparse_colon().c_str());
+            // Get station statistics
+            struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+            // StationStats stat;
+            // HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
+            // if (it == _rx_stats.end())
+            //   stat = StationStats();
+            // else
+            //   stat = it.value();
+            // stat._rate = ceh->rate;
+            // stat._noise = ceh->silence;
+            // stat._signal = ceh->rssi + _signal_offset;
+            // stat._packets++;
+            // stat._last_received.assign_now();
+            _scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
+            //fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
+        }else{
+                        
+            //fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Packets received from a different MAC\n");
+        }
+        //_scanning_result = 200; // For testing
+        //fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result); // For testing
+                
 	}
   }
   
@@ -2054,7 +2062,9 @@ OdinAgent::read_handler(Element *e, void *user_data)
     case handler_scan_client: {
           sa << agent->_scanning_result << "\n"; // Scanned result
     	  agent->_active_scanning = false;// Disable scanning
-    	  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", agent->_scanning_result);
+    	  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results: %i (%i)\n", agent->_scanning_result, (agent->_scanning_result)-256);
+          if ( agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
+            fprintf(stderr, "##################################################################\n\n");
           break;
      }
     
@@ -2392,21 +2402,32 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	{
     		return -1;
     	}
+    	
+        if (agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
+            fprintf(stderr, "##################################################################\n");
+        
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
     	frequency = agent->convert_channel_to_frequency(scan_channel);
-    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " &";
-    	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", sa.c_str()); // for testing
+        
+        // "hostapd-utils" package is needed for executing this command
+    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " > /dev/null";
+    	
+    	//fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", sa.c_str()); // for testing
+        //fprintf(stderr, "[Odinagent.cc] ########### Scanning: Aux Channel --> %d\n", agent->_channel_aux); // for testing
+        //fprintf(stderr, "[Odinagent.cc] ########### Scanning: Scan Channel --> %d\n", scan_channel); // for testing
     	if (agent->_channel_aux != scan_channel) {
     		agent->_channel_aux = scan_channel;
     		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
-    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting channel to scan in auxiliary interface \n"); // for testing
+    		if (agent->_debug_level % 10 > 0)
+                fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting channel to scan in auxiliary interface \n"); // for testing
     	}
     	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
     		agent->_scanning_result = 0;
     		agent->_scanned_sta_mac = sta_mac;
     		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
-    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting scanning --> true \n"); // for testing
+    		if (agent->_debug_level % 10 > 0)
+                fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting scanning status --> true \n"); // for testing
     	}
     	break;
     }
