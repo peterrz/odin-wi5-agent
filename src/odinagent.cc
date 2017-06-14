@@ -121,6 +121,7 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   _active_scanning = false;
   _scanned_sta_mac = EtherAddress();
   _scanning_result = 0;
+  _scanned_packets = 0;
 
 	// read the arguments of the .cli file
   if (Args(conf, this, errh)
@@ -1725,7 +1726,17 @@ OdinAgent::push(int port, Packet *p)
             // stat._signal = ceh->rssi + _signal_offset;
             // stat._packets++;
             // stat._last_received.assign_now();
-            _scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
+            _signal = ceh->rssi-256;
+            _signal_mW = pow (10, _signal / 10); // Lineal power
+            _avg_signal_mW = _avg_signal_mW  + ((_signal_mW  - _avg_signal_mW)/( _scanned_packets +1)); // Cumulative moving average
+            _scanned_packets++; // New packet
+            _avg_signal = 10.0*log10(_avg_signal_mW); // Lineal average power
+            _scanning_result = (int) round(_avg_signal) + 256 + _signal_offset; // Result
+            if (_debug_level % 10 > 1){
+                fprintf(stderr, "[Odinagent.cc] ########### Packet number: %d\n",_scanned_packets);
+                fprintf(stderr, "[Odinagent.cc] ########### Signal(mW): %f - Signal(dBm): %f\n",_signal_mW, _signal);
+                fprintf(stderr, "[Odinagent.cc] ########### Average Signal(mW): %f - Average Signal(dBm): %f\n",_avg_signal_mW,_avg_signal);
+            }
             //fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
         }else{
                         
@@ -2062,7 +2073,8 @@ OdinAgent::read_handler(Element *e, void *user_data)
     case handler_scan_client: {
           sa << agent->_scanning_result << "\n"; // Scanned result
     	  agent->_active_scanning = false;// Disable scanning
-    	  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results: %i (%i)\n", agent->_scanning_result, (agent->_scanning_result)-256);
+          if ( agent->_debug_level % 10 > 0)
+            fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results: %i (%i dBm)\n", agent->_scanning_result, (agent->_scanning_result)-256);
           if ( agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
             fprintf(stderr, "##################################################################\n\n");
           break;
@@ -2424,6 +2436,8 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	}
     	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
     		agent->_scanning_result = 0;
+            agent->_scanned_packets = 0;
+            agent->_avg_signal_mW = 0;
     		agent->_scanned_sta_mac = sta_mac;
     		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
     		if (agent->_debug_level % 10 > 0)

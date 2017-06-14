@@ -189,6 +189,11 @@ public:
   bool _active_scanning; // To active scanning
   EtherAddress _scanned_sta_mac; // MAC to scan
   int _scanning_result; // Result for scanning
+  int _scanned_packets; // Number of packets scanned
+  double _signal; // Packet power in dbm
+  double _signal_mW; // Packet power in mW
+  double _avg_signal_mW; // Average packet power in mW
+  double _avg_signal; // Average packet power in dBm
   Vector<Subscription> _subscription_list;
   //bool _debug;
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed
