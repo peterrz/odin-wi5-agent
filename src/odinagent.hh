@@ -47,7 +47,7 @@ public:
 
   // From Click
   const char *class_name() const	{ return "OdinAgent"; }
-  const char *port_count() const  { return "3/4"; }
+  const char *port_count() const  { return "3/5"; }
   const char *processing() const  { return PUSH; }
   int initialize(ErrorHandler *); // initialize element
   int configure(Vector<String> &, ErrorHandler *);
@@ -87,6 +87,7 @@ public:
 
   // Methods to handle and send
   // 802.11 management messages
+  String recv_beacon (Packet *p);
   void recv_probe_request (Packet *p);
   void recv_deauth (Packet *p);
   void send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bool probe);
@@ -134,7 +135,10 @@ public:
     handler_update_signal_strength,
     handler_signal_strength_offset,
     handler_channel_switch_announcement,
-	  handler_scan_client,
+	handler_scan_client,
+	handler_scan_APs,
+	handler_send_mesurement_beacon,
+	handler_scanning_flags,
   };
 
   // Tx and Rx-stats about stations
@@ -181,43 +185,78 @@ public:
   int _interval_ms_default; // Beacon interval: normal mode timer
   int _interval_ms_burst; // Beacon interval: burst mode timer, used during channel switch
   int _channel; // Channel to be shared by all VAPs.
-  int _channel_aux; // Channel to be used for scanning.
+  int _scan_channel; // Channel to be used for scanning.
   int _new_channel; // New channel for CSA
   bool _csa; // For channel switch announcement
   int _count_csa_beacon; // For channel switch announcement
   int _count_csa_beacon_default; // Default number of beacons before channel switch
-  bool _active_scanning; // To active scanning
-  EtherAddress _scanned_sta_mac; // MAC to scan
-  int _scanning_result; // Result for scanning
-  int _scanned_packets; // Number of packets scanned
-  double _signal; // Packet power in dbm
-  double _signal_mW; // Packet power in mW
-  double _avg_signal_mW; // Average packet power in mW
-  double _avg_signal; // Average packet power in dBm
-  Vector<Subscription> _subscription_list;
+  int _client_scanned_packets; // Number of packets scanned
+  double _client_signal; // Packet power in dbm
+  double _client_signal_mW; // Packet power in mW
+  double _client_avg_signal_mW; // Average packet power in mW
+  double _client_avg_signal; // Average packet power in dBm
+
+  //Scanning
+  int _active_client_scanning; // To active STA scanning
+  EtherAddress _scanned_sta_mac; // STA MAC to scan
+  int _client_scanning_result; // Result for STA scanning
+
+  class APScanning {
+    public:
+        EtherAddress bssid;
+		double avg_signal;
+		int packets; //# packets
+	APScanning() {
+      memset(this, 0, sizeof(*this));
+    }
+  };
+  
+  
+  int _active_AP_scanning; // To active AP scanning
+  String _scanning_SSID; // SSID to scan
+  //int _AP_scanning_interval; // Interval to scan APs (ms)
+  //int _num_intervals_for_AP_scanning; // count the number of scanning intervals for AP scanning 
+  Vector<APScanning> _APScanning_list; //Scanned APs for distance (dBs) between APs
+  HashTable<EtherAddress, StationStats> _scanned_station_stats; // Keep track of rx-statistics of scanned stations from which we hear frames.
+  
+
+  int _active_mesurement_beacon; // To active mesurement beacon
+  String _mesurement_beacon_SSID; // SSID to send
+  //int _mesurement_beacon_interval; // Interval to send (ms)
+  //int _num_mesurement_beacon; // number of mesurement beacon to send
+  //int _num_intervals_for_mesurement_beacon; // count the number of scanning intervals for mesurement beacons
+  int _interval_ms_mesurement_beacon; // Mesurement beacon interval: time interval [msec] after which mesurement beacon timer will be rescheduled. 
+  void send_mesurement_beacon();
+
   //bool _debug;
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed
+
+  //Subscription
+  Vector<Subscription> _subscription_list;
   HashTable<EtherAddress, String> _packet_buffer;
   void match_against_subscriptions(StationStats stats, EtherAddress src);
+
+  // Agents use the same channel or agents use different channels
   int _multichannel_agents;
 
 private:
   void compute_bssid_mask ();
   void update_tx_stats(Packet *p);
   void update_rx_stats(Packet *p);
+  void update_scanned_station_stats(Packet *p);
   EtherAddress _hw_mac_addr;
   class AvailableRates *_rtable;
   int _associd;
   Timer _beacon_timer;
   Timer _clean_stats_timer;
   Timer _general_timer;
+  Timer _scanning_timer;
   IPAddress _default_gw_addr;
   String _debugfs_string;
   String _ssid_agent_string;	// stores the SSID of the agent
   int _tx_rate;
   int _tx_power;
   int _hidden;
-
 };
 
 

@@ -164,29 +164,32 @@ if (DEBUG_CLICK > 0):
 
 print '''  -> [1]odinagent'''
 
-print '''  odinagent[2]
-  -> q'''
-
 print '''
-// create a queue and connect it to SetTXRate-RadiotapEncap and send it to the network interface
+// create a queue 'q' for transmission of packets by the primary interface (mon0) and connect it to SetTXRate-RadiotapEncap
 q :: Queue(%s)
   -> SetTXRate (%s)	// e.g. if it is 108, this means 54Mbps=108*500kbps
   -> RadiotapEncap()
   -> to_dev :: ToDevice (%s0);
 ''' % (QUEUE_SIZE, TX_RATE, NETWORK_INTERFACE_NAMES )
 
-print '''
-// create a queue 'q2' for transmission of packets by the secondary interface (mon1)
-odinagent[4]
-  -> q2'''
+
+print '''  odinagent[2]
+  -> q'''
+
+
 
 print '''
-// create a queue and connect it to SetTXRate-RadiotapEncap and send it to the network interface
+// create a queue 'q2' for transmission of packets by the secondary interface (mon1) and connect it to SetTXRate-RadiotapEncap
 q2 :: Queue(%s)
   -> SetTXRate (%s)	// e.g. if it is 108, this means 54Mbps=108*500kbps
   -> RadiotapEncap()
-  -> to_dev :: ToDevice (%s1);
+  -> to_dev2 :: ToDevice (%s1);
 ''' % (QUEUE_SIZE, TX_RATE, NETWORK_INTERFACE_NAMES )
+
+print '''
+odinagent[4]
+  -> q2'''
+
 
 print '''
 // ----------------Packets coming up (from the STA to the AP) go to the input 0 of the Odin Agent
