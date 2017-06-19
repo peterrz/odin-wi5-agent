@@ -26,6 +26,10 @@ agent-click-file-gen.py
 This is the `.cli` file generator for the agent. Configure and use this script
 to generate the appropriate Odin agent Click file.
 
+This is the scheme implemented by the `.cli` file: it includes an auxiliary interface.
+
+![scheme of the cli file](https://github.com/Wi5/odin-wi5/blob/master/pictures/diagram_Odin_Click_agent_2ifaces.png)
+
 If you run `$python agent-click-file-gen.py` you will see an example of how to use the python script, and the meaning of each parameter.
 
 
