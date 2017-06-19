@@ -66,6 +66,7 @@ HIDDEN = int(sys.argv[13])
 MULTICHANNEL_AGENTS = int(sys.argv[14])
 DEFAULT_BEACON_INTERVAL = int(sys.argv[15])
 BURST_BEACON_INTERVAL = int(sys.argv[16])
+MEASUREMENT_BEACON_INTERVAL = int(sys.argv[17])
   
 # Set the value of some constants
 NETWORK_INTERFACE_NAMES = "mon"		 # beginning of the network interface names in monitor mode. e.g. mon
