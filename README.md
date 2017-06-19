@@ -15,7 +15,7 @@ These are the Click OdinAgent element files. They have only been tested in users
 
 To build, follow the instructions in https://github.com/Wi5/odin-wi5/wiki/Cross-compiling-Click-Modular-Router-for-Odin
 
-You also have a binary version of Click, cross-compiled for AR71xx architecture https://github.com/Wi5/odin-wi5-agent/tree/integrate_detection/click_binary_file
+You also have a binary version of Click, cross-compiled for AR71xx architecture https://github.com/Wi5/odin-wi5-agent/tree/Handover_Improvement/click_binary_file
 
 A `click-align` binary is also available, compiled for the same architecture.
 
@@ -36,6 +36,6 @@ If you run `$python agent-click-file-gen.py` you will see an example of how to u
 Scripts for starting the Odin Wi5 agent
 ---------------------------------------
 
-The script for starting the Wi5 agent are here https://github.com/Wi5/odin-wi5-agent/tree/integrate_detection/scripts_start_ap_odin
+The script for starting the Wi5 agent are here https://github.com/Wi5/odin-wi5-agent/tree/Handover_Improvement/scripts_start_ap_odin
 
 A script for debugging is also available.
