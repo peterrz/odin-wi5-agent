@@ -137,7 +137,7 @@ public:
     handler_channel_switch_announcement,
 	handler_scan_client,
 	handler_scan_APs,
-	handler_send_mesurement_beacon,
+	handler_send_measurement_beacon,
 	handler_scanning_flags,
   };
 
@@ -220,13 +220,13 @@ public:
   HashTable<EtherAddress, StationStats> _scanned_station_stats; // Keep track of rx-statistics of scanned stations from which we hear frames.
   
 
-  int _active_mesurement_beacon; // To active mesurement beacon
-  String _mesurement_beacon_SSID; // SSID to send
-  //int _mesurement_beacon_interval; // Interval to send (ms)
-  //int _num_mesurement_beacon; // number of mesurement beacon to send
-  //int _num_intervals_for_mesurement_beacon; // count the number of scanning intervals for mesurement beacons
-  int _interval_ms_mesurement_beacon; // Mesurement beacon interval: time interval [msec] after which mesurement beacon timer will be rescheduled. 
-  void send_mesurement_beacon();
+  int _active_measurement_beacon; // To active measurement beacon
+  String _measurement_beacon_SSID; // SSID to send
+  //int _measurement_beacon_interval; // Interval to send (ms)
+  //int _num_measurement_beacon; // number of measurement beacon to send
+  //int _num_intervals_for_measurement_beacon; // count the number of scanning intervals for measurement beacons
+  int _interval_ms_measurement_beacon; // measurement beacon interval: time interval [msec] after which measurement beacon timer will be rescheduled. 
+  void send_measurement_beacon();
 
   //bool _debug;
   int _debug_level;		//"0" no info displayed; "1" only basic info displayed; "2" all the info displayed; "1x" demo info displayed

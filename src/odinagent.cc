@@ -46,8 +46,8 @@ uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a 
 void scanning_thread(Timer *timer, void *);
 
 //int RESCHEDULE_INTERVAL_SCANNING = 50; //time interval [msec] after which scanning timer will be rescheduled
-//int RESCHEDULE_INTERVAL_MESUREMENT_BEACON; // time interval [msec] after which mesurement beacon timer will be rescheduled. 
-                                                                          // It is mesurement beacon interval. 
+//int RESCHEDULE_INTERVAL_measurement_BEACON; // time interval [msec] after which measurement beacon timer will be rescheduled. 
+                                                                          // It is measurement beacon interval. 
 
 
 
@@ -140,11 +140,11 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   //_AP_scanning_interval = 0;
   //_num_intervals_for_AP_scanning = 0;
 
-  _active_mesurement_beacon = 0;
-  _mesurement_beacon_SSID = ""; 
-  //_mesurement_beacon_interval = 0;
-  //_num_mesurement_beacon = 0;
-  //_num_intervals_for_mesurement_beacon = 1;
+  _active_measurement_beacon = 0;
+  _measurement_beacon_SSID = ""; 
+  //_measurement_beacon_interval = 0;
+  //_num_measurement_beacon = 0;
+  //_num_intervals_for_measurement_beacon = 1;
   
 	// read the arguments of the .cli file
   if (Args(conf, this, errh)
@@ -161,12 +161,12 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("MULTICHANNEL_AGENTS", _multichannel_agents)
   .read_m("DEFAULT_BEACON_INTERVAL", _interval_ms_default)
   .read_m("BURST_BEACON_INTERVAL", _interval_ms_burst)
+  .read_m("MEASUREMENT_BEACON_INTERVAL", _interval_ms_measurement_beacon)
   .complete() < 0)
   return -1;
 
   // Put the correct value in the variable after reading
   _interval_ms = _interval_ms_default;
-  _interval_ms_mesurement_beacon = _interval_ms_default;
 
   return 0;
 }
@@ -2237,9 +2237,9 @@ OdinAgent::read_handler(Element *e, void *user_data)
      break;
     }
 	case handler_scanning_flags: { 
-	  sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_mesurement_beacon << "\n";;
+	  sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_measurement_beacon << "\n";;
 	  if (agent->_debug_level % 10 > 0)
-		fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    MesurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_mesurement_beacon);
+		fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    measurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
       break;
     }
   }
@@ -2565,7 +2565,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       break;
     }
     case handler_scan_client: { // need testing
-    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_mesurement_beacon == 1) {
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
 			break; //FIXME
 		}
     	EtherAddress sta_mac;
@@ -2607,7 +2607,7 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     }
 
     case handler_scan_APs: { 
-    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_mesurement_beacon == 1) {
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
 			break; //FIXME
 		}
         String ssid;
@@ -2646,8 +2646,8 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 		else agent->_APScanning_list.clear();
     	break;
     }
-    case handler_send_mesurement_beacon: { // need testing
-    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_mesurement_beacon == 1) {
+    case handler_send_measurement_beacon: { // need testing
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
 			break; //FIXME
 		}
 		String ssid;
@@ -2664,35 +2664,35 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     		return -1;
     	}
     	if (agent->_debug_level % 10 > 0)
-    		fprintf(stderr, "[Odinagent.cc] ########### Send mesurement beacon (SSID %s) in channel %d\n", ssid.c_str(),scan_channel);
+    		fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon (SSID %s) in channel %d\n", ssid.c_str(),scan_channel);
     	
 		// Set channel to send
     	frequency = agent->convert_channel_to_frequency(scan_channel);
     	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " > /dev/null";
     	if (agent->_debug_level % 10 > 0)
-			fprintf(stderr, "[Odinagent.cc] ########### Send mesurement beacon: Testing command line --> %s\n", sa.c_str()); // for testing
+			fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon: Testing command line --> %s\n", sa.c_str()); // for testing
     	if (agent->_scan_channel != scan_channel) {
     		agent->_scan_channel = scan_channel;
     		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
     		if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] ########### Send mesurement beacon: command line --> %s\n", sa.c_str()); // for testing
+				fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon: command line --> %s\n", sa.c_str()); // for testing
     	}
 
-    	// Enable mesurement beacon (FIXME: time to begin this action)
-		agent->_active_mesurement_beacon = 1;
-		agent->_mesurement_beacon_SSID = ssid; 
-		//agent->_mesurement_beacon_interval = interval;
-		//agent->_num_mesurement_beacon = 0;
+    	// Enable measurement beacon (FIXME: time to begin this action)
+		agent->_active_measurement_beacon = 1;
+		agent->_measurement_beacon_SSID = ssid; 
+		//agent->_measurement_beacon_interval = interval;
+		//agent->_num_measurement_beacon = 0;
     	break;
     }
 	case handler_scanning_flags: { 
       int client_scanning_flag;
       int AP_scanning_flag;
-      int mesurement_beacon_flag;
+      int measurement_beacon_flag;
       if (Args(agent, errh).push_back_words(str)
         .read_mp("ClientScanningFlag", client_scanning_flag)
         .read_mp("APScanningFlag", AP_scanning_flag)
-        .read_mp("MesurementBeaconFlag", mesurement_beacon_flag)
+        .read_mp("measurementBeaconFlag", measurement_beacon_flag)
         .complete() < 0)
         {
           return -1;
@@ -2700,10 +2700,10 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
 	  //Set scanning to do
       agent->_active_client_scanning = client_scanning_flag;
       agent->_active_AP_scanning = AP_scanning_flag;
-      agent->_active_mesurement_beacon = mesurement_beacon_flag;
+      agent->_active_measurement_beacon = measurement_beacon_flag;
 	  if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] ########### Changing scanning flags --> ClientScanningFlag:%i   APScanningFlag:%i    MesurementBeaconFlag:%i\n", 
-				                 agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_mesurement_beacon);
+				fprintf(stderr, "[Odinagent.cc] ########### Changing scanning flags --> ClientScanningFlag:%i   APScanningFlag:%i    measurementBeaconFlag:%i\n", 
+				                 agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
       break;
     }   
   }
@@ -2740,7 +2740,7 @@ OdinAgent::add_handlers()
   add_write_handler("channel_switch_announcement", write_handler, handler_channel_switch_announcement);
   add_write_handler("scan_client", write_handler, handler_scan_client);
   add_write_handler("scan_APs", write_handler, handler_scan_APs);
-  add_write_handler("send_mesurement_beacon", write_handler, handler_send_mesurement_beacon);
+  add_write_handler("send_measurement_beacon", write_handler, handler_send_measurement_beacon);
   add_write_handler("scanning_flags", write_handler, handler_scanning_flags);
 
 }
@@ -2847,10 +2847,10 @@ void misc_thread(Timer *timer, void *data){
 
 
 void
-OdinAgent::send_mesurement_beacon () {
+OdinAgent::send_measurement_beacon () {
 
   EtherAddress bssid = _hw_mac_addr;
-  String my_ssid = _mesurement_beacon_SSID;
+  String my_ssid = _measurement_beacon_SSID;
 
   Vector<int> rates = _rtable->lookup(bssid);
 
@@ -2896,7 +2896,7 @@ OdinAgent::send_mesurement_beacon () {
   actual_length += 8;
 
   /* beacon interval */
-  uint16_t beacon_int = (uint16_t) _interval_ms_mesurement_beacon;
+  uint16_t beacon_int = (uint16_t) _interval_ms_measurement_beacon;
   *(uint16_t *)ptr = cpu_to_le16(beacon_int);
   ptr += 2;
   actual_length += 2;
@@ -2937,26 +2937,26 @@ OdinAgent::send_mesurement_beacon () {
 
 
 
-/* Thread for mon1 scanning interface (AP scanning, send mesurement beacon, ...) */
+/* Thread for mon1 scanning interface (AP scanning, send measurement beacon, ...) */
 void scanning_thread(Timer *timer, void *data){
 
     OdinAgent *agent = (OdinAgent *) data;
 
-	// Mesurement beacon
-	if (agent->_active_mesurement_beacon == 1) 
-		 agent->send_mesurement_beacon ();
+	// measurement beacon
+	if (agent->_active_measurement_beacon == 1) 
+		 agent->send_measurement_beacon ();
 
-    /*if (agent->_active_mesurement_beacon) {
-		if ((agent->_num_intervals_for_mesurement_beacon % (RESCHEDULE_INTERVAL_MESUREMENT_BEACON / RESCHEDULE_INTERVAL_SCANNING)) == 0) {
-			agent->send_mesurement_beacon ();
-			++(agent->_num_mesurement_beacon);
-		    if (agent->_num_mesurement_beacon > (agent->_mesurement_beacon_interval/RESCHEDULE_INTERVAL_MESUREMENT_BEACON)) { 
-				agent->_active_mesurement_beacon = false; //When interval time had finished
-				agent->_num_intervals_for_mesurement_beacon = 1;
+    /*if (agent->_active_measurement_beacon) {
+		if ((agent->_num_intervals_for_measurement_beacon % (RESCHEDULE_INTERVAL_measurement_BEACON / RESCHEDULE_INTERVAL_SCANNING)) == 0) {
+			agent->send_measurement_beacon ();
+			++(agent->_num_measurement_beacon);
+		    if (agent->_num_measurement_beacon > (agent->_measurement_beacon_interval/RESCHEDULE_INTERVAL_measurement_BEACON)) { 
+				agent->_active_measurement_beacon = false; //When interval time had finished
+				agent->_num_intervals_for_measurement_beacon = 1;
 			}
 		}
-		if (agent->_active_mesurement_beacon)
-			++agent->_num_intervals_for_mesurement_beacon;
+		if (agent->_active_measurement_beacon)
+			++agent->_num_intervals_for_measurement_beacon;
 	}*/
 	
 	// AP Scanning
@@ -2970,7 +2970,7 @@ void scanning_thread(Timer *timer, void *data){
 			++(agent->_num_intervals_for_AP_scanning);
 	}*/
 
-    timer->reschedule_after_msec(agent->_interval_ms_mesurement_beacon);
+    timer->reschedule_after_msec(agent->_interval_ms_measurement_beacon);
 }
 
 

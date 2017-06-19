@@ -13,10 +13,10 @@
 
 import sys
 
-if (len(sys.argv) != 17):
+if (len(sys.argv) != 18):
     print 'Usage:'
     print ''
-    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN> <MULTICHANNEL_AGENTS> <DEFAULT_BEACON_INTERVAL> <BURST_BEACON_INTERVAL>' %(sys.argv[0])
+    print '%s <AP_CHANNEL> <QUEUE_SIZE> <MAC_ADDR_AP> <ODIN_MASTER_IP> <ODIN_MASTER_PORT> <DEBUGFS_FILE> <SSIDAGENT> <ODIN_AGENT_IP> <DEBUG_CLICK> <DEBUG_ODIN> <TX_RATE> <TX_POWER> <HIDDEN> <MULTICHANNEL_AGENTS> <DEFAULT_BEACON_INTERVAL> <BURST_BEACON_INTERVAL> <MEASUREMENT_BEACON_INTERVAL>' %(sys.argv[0])
     print ''
     print 'AP_CHANNEL: it must be the same where mon0 of the AP is placed. To avoid problems at init time, it MUST be the same channel specified in the /etc/config/wireless file of the AP'
     print 'QUEUE_SIZE: you can use the size 50'
@@ -39,9 +39,10 @@ if (len(sys.argv) != 17):
     print '                     If MULTICHANNEL_AGENTS is 0, it means that all the APs are in the same channel'
     print 'DEFAULT_BEACON_INTERVAL: Time between beacons (in milliseconds). Recommended values: 20-100'
     print 'BURST_BEACON_INTERVAL: Time between beacons when a burst of CSAs is sent after a handoff (in milliseconds). Recommended values: 5-10'
+    print 'MEASUREMENT_BEACON_INTERVAL: Time between measurement beacons (in milliseconds). Used for measuring the distance in dBs between APs. Recommended values: 20-100'
     print ''
     print 'Example:'
-    print '$ python %s 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 0 01 108 25 0 1 100 10 > agent.cli' %(sys.argv[0])
+    print '$ python %s 9 50 60:E3:27:4F:C7:E1 192.168.1.129 2819 /sys/kernel/debug/ieee80211/phy0/ath9k/bssid_extra wi5-demo 192.168.1.9 0 01 108 25 0 1 100 10 100 > agent.cli' %(sys.argv[0])
     print ''
     print 'and then run the .cli file you have generated'
     print 'click$ ./bin/click agent.cli'
@@ -90,8 +91,8 @@ print '''
 
 print '''
 // call OdinAgent::configure to create and configure an Odin agent:
-odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s)
-''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL)
+odinagent::OdinAgent(HWADDR %s, RT rates, CHANNEL %s, DEFAULT_GW %s, DEBUGFS %s, SSIDAGENT %s, DEBUG_ODIN %s, TX_RATE %s, TX_POWER %s, HIDDEN %s, MULTICHANNEL_AGENTS %s, DEFAULT_BEACON_INTERVAL %s, BURST_BEACON_INTERVAL %s, MEASUREMENT_BEACON_INTERVAL %s)
+''' % (AP_UNIQUE_BSSID, AP_CHANNEL, DEFAULT_GW, DEBUGFS_FILE, SSIDAGENT, DEBUG_ODIN, TX_RATE, TX_POWER, HIDDEN, MULTICHANNEL_AGENTS, DEFAULT_BEACON_INTERVAL, BURST_BEACON_INTERVAL, MEASUREMENT_BEACON_INTERVAL)
 
 print '''// send a ping to odinsocket every 2 seconds
 TimedSource(2, "ping\n")->  odinsocket::Socket(UDP, %s, %s, CLIENT true)
