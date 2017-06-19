@@ -2193,7 +2193,7 @@ OdinAgent::read_handler(Element *e, void *user_data)
 	  // Scanning result
       sa << agent->_client_scanning_result << "\n"; 
 	  if (agent->_debug_level % 10 > 0)
-		  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending STA scan results: %i (%i dBm)\n", agent->_client_scanning_result, (agent->_client__scanning_result)-256);
+		  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending STA scan results: %i (%i dBm)\n", agent->_client_scanning_result, (agent->_client_scanning_result)-256);
 	  if ( agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
 		 fprintf(stderr, "##################################################################\n\n");
       break;
