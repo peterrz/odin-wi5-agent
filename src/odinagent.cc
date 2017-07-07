@@ -38,12 +38,18 @@ CLICK_DECLS
 void misc_thread(Timer *timer, void *);
 void cleanup_lvap(Timer *timer, void *);
 
-int THRESHOLD_OLD_STATS = 30; //timer interval [sec] after which the stats of old clients will be removed
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
-int RESCHEDULE_INTERVAL_STATS = 60; //time interval [sec] after which general_timer will be rescheduled
-int THRESHOLD_REMOVE_LVAP = 80; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
+int RESCHEDULE_INTERVAL_STATS = 30; //time interval [sec] after which general_timer will be rescheduled
+int THRESHOLD_REMOVE_LVAP = 30; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
 uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
-int MULTICHANNEL_AGENTS = 0; //Odin environment with agents in several channels
+
+void scanning_thread(Timer *timer, void *);
+
+//int RESCHEDULE_INTERVAL_SCANNING = 50; //time interval [msec] after which scanning timer will be rescheduled
+//int RESCHEDULE_INTERVAL_measurement_BEACON; // time interval [msec] after which measurement beacon timer will be rescheduled. 
+                                                                          // It is measurement beacon interval. 
+
+
 
 OdinAgent::OdinAgent()
 : _mean(0),
@@ -59,10 +65,14 @@ OdinAgent::OdinAgent()
   _ssid_agent_string(""),
   _tx_rate(0),
   _tx_power(0),
-  _hidden(0)	
+  _hidden(0),
+  _multichannel_agents(1),
+  _interval_ms_default(100),          // Inter-Beacon Interval for normal mode
+  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode  
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
+  _scanning_timer.assign (&scanning_thread, (void *) this);
 }
 
 OdinAgent::~OdinAgent()
@@ -77,6 +87,8 @@ OdinAgent::initialize(ErrorHandler*)
   _general_timer.schedule_now();
   _clean_stats_timer.initialize(this);
   _clean_stats_timer.schedule_now();
+  _scanning_timer.initialize(this);
+  _scanning_timer.schedule_now();
   compute_bssid_mask ();
   return 0;
 }
@@ -109,21 +121,31 @@ OdinAgent::run_timer (Timer*)
 int
 OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _interval_ms_default = 100; // BI for normal mode
-  _interval_ms_burst = 10; // BI value for burst mode
-  _interval_ms = _interval_ms_default;
+  // Default values
   _channel = 6;
-  _channel_aux = 0; // Initialized in 0, so it will change the channel the first time
+  _scan_channel = 0; // Initialized in 0, so it will change the channel the first time
   _new_channel = 1;
-  _csa = false; //
-  _csa_count_default = 10; // Wait (n+1) beacons before first channel switch announcement
-  _csa_count = _csa_count_default; 
-  _count_csa_beacon_default = 4; // Number of beacons before channel switch
-  _count_csa_beacon = _count_csa_beacon_default;
-  _active_scanning = false;
-  _scanned_sta_mac = EtherAddress();
-  _scanning_result = 0;
 
+  _csa = false; //
+  _count_csa_beacon_default = 4; // Number of beacons, with CSA element, sent by the AP before channel switch
+  _count_csa_beacon = _count_csa_beacon_default;
+
+  _active_client_scanning = 0;
+  _scanned_sta_mac = EtherAddress();
+  _client_scanning_result = 0;
+  _client_scanned_packets = 0;
+
+  _active_AP_scanning = 0; 
+  _scanning_SSID = "";
+  //_AP_scanning_interval = 0;
+  //_num_intervals_for_AP_scanning = 0;
+
+  _active_measurement_beacon = 0;
+  _measurement_beacon_SSID = ""; 
+  //_measurement_beacon_interval = 0;
+  //_num_measurement_beacon = 0;
+  //_num_intervals_for_measurement_beacon = 1;
+  
 	// read the arguments of the .cli file
   if (Args(conf, this, errh)
   .read_mp("HWADDR", _hw_mac_addr)
@@ -136,8 +158,15 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("TX_RATE", _tx_rate)		// as we are not yet able to do per-packet TPC, we use a fixed transmission rate, and we must read it to perform the calculations of the statistics
   .read_m("TX_POWER", _tx_power)	// as we are not yet able to do per-packet TPC, we use a fixed transmission power, and we must read it to perform the calculations of the statistics
   .read_m("HIDDEN", _hidden)
+  .read_m("MULTICHANNEL_AGENTS", _multichannel_agents)
+  .read_m("DEFAULT_BEACON_INTERVAL", _interval_ms_default)
+  .read_m("BURST_BEACON_INTERVAL", _interval_ms_burst)
+  .read_m("MEASUREMENT_BEACON_INTERVAL", _interval_ms_measurement_beacon)
   .complete() < 0)
   return -1;
+
+  // Put the correct value in the variable after reading
+  _interval_ms = _interval_ms_default;
 
   return 0;
 }
@@ -457,6 +486,52 @@ OdinAgent::recv_deauth (Packet *p) {
 
         return;
 }
+
+
+/**
+ * Handle a beacon frame to return its SSID value
+ */
+String 
+OdinAgent::recv_beacon (Packet *p)
+{
+
+  //struct click_wifi *w = (struct click_wifi *) p->data();
+  uint8_t *ptr;
+
+  ptr = (uint8_t *) p->data() + sizeof(struct click_wifi);
+
+  uint8_t *end  = (uint8_t *) p->data() + p->length();
+
+  uint8_t *ssid_l = NULL;
+  //uint8_t *rates_l = NULL; commented becaus it was not used
+
+  while (ptr < end) {
+	  switch (*ptr) {
+	  case WIFI_ELEMID_SSID:
+		ssid_l = ptr;
+		break;
+	  case WIFI_ELEMID_RATES:
+		//rates_l = ptr;
+		break;
+	  default:
+		break;
+	  }
+	  ptr += ptr[1] + 2;
+  }
+
+  String ssid = "";
+  if (ssid_l && ssid_l[1]) {
+    ssid = String((char *) ssid_l + 2, WIFI_MIN((int)ssid_l[1], WIFI_NWID_MAXSIZE));
+  }
+
+  return ssid;
+}
+
+
+
+
+
+
 
 
 /**
@@ -1462,6 +1537,66 @@ OdinAgent::update_rx_stats(Packet *p)
   _rx_stats.set (src, stat);
 }
 
+
+
+/**
+ * Every time a packet is received by scanning interface, the reception
+ * statistics have to be updated in scanned_station_stats HashTable
+ */
+void
+OdinAgent::update_scanned_station_stats(Packet *p)
+{
+  struct click_wifi *w = (struct click_wifi *) p->data();
+  EtherAddress src = EtherAddress(w->i_addr2);
+
+  struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+
+  StationStats stat;
+  bool first_packet = false; // it will be true if the packet is the first one used for the average
+  HashTable<EtherAddress, StationStats>::const_iterator it = _scanned_station_stats.find(src);
+
+	// if the station does not have a statistics variable, create it
+  if (it == _scanned_station_stats.end()) {
+    stat = StationStats();
+
+	stat._time_first_packet.assign_now();	// update the value of the first received packet
+	first_packet = true;
+  }
+  else
+    stat = it.value();
+
+  stat._rate = ceh->rate;
+  stat._signal = ceh->rssi + _signal_offset;
+  stat._noise = ceh->silence;
+  stat._len_pkt = p->length();
+  
+  stat._packets++; // increase the number of packets
+
+	// Calculate the averaged statistics
+  stat._avg_rate = stat._avg_rate + ((stat._rate*500 - stat._avg_rate)/stat._packets); // rate in Kbps
+
+  // Calculate the value of the signal, converting from dBm to mW and back
+  double signal_mW;
+  double avg_signal_mW;
+  signal_mW = pow (10, (stat._signal - 256) / 10);
+  if (first_packet)	// if this is the first packet, the previous average will be 0
+    avg_signal_mW  = 0;
+  else 
+    avg_signal_mW  = pow (10, stat._avg_signal / 10);
+  avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/stat._packets);
+  stat._avg_signal = 10 * log10 (avg_signal_mW); // signal in dBm
+  
+  stat._avg_len_pkt = stat._avg_len_pkt + ((stat._len_pkt - stat._avg_len_pkt)/stat._packets); // length in bytes
+  stat._air_time = stat._air_time + ((double)(8*stat._len_pkt) / (double)(stat._rate*500)); // time used by this packet (in ms)
+
+  // store the timestamp of this packet as the one of the last packet
+  stat._time_last_packet.assign_now();
+
+ // update the statistics table
+  _scanned_station_stats.set (src, stat);
+}
+
+
 /**
  * This element has three input ports and 4 output ports.
  *
@@ -1490,53 +1625,16 @@ OdinAgent::push(int port, Packet *p)
   // We filter data frames by available VAPs,
   // and we handle Mgmnt frames accordingly.
 
+  uint8_t type;
+  uint8_t subtype;
+
   if (port == 0) {
+	/****************************************************************************
+	*****************************************************************************
+	*****************************************************************************
+	*****************************************************************************/
     // if port == 0, paket is coming from the lower layer
-
-		/****************************************************************************
-		*****************************************************************************
-		**  If scanning interface is mon0 put this code when port == 0  *************
-		*****************************************************************************
-		*****************************************************************************/
-		/*  	if (_active_scanning) {
-
-			if (p->length() < sizeof(struct click_wifi)) {
-			  p->kill();
-			  return;
-			}
-
-			struct click_wifi *w = (struct click_wifi *) p->data();
-			EtherAddress src = EtherAddress(w->i_addr2);
-			if (src == _scanned_sta_mac) {
-				// Get station statistics
-				struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
-				// StationStats stat;
-				// HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
-				// if (it == _rx_stats.end())
-				//   stat = StationStats();
-				// else
-				//   stat = it.value();
-
-				// stat._rate = ceh->rate;
-				// stat._noise = ceh->silence;
-				// stat._signal = ceh->rssi + _signal_offset;
-				// stat._packets++;
-				// stat._last_received.assign_now();
-				_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
-			}
-		}*/
-
-		/****************************************************************************
-		*****************************************************************************
-		*****************************************************************************
-		*****************************************************************************/
-
-		/****************************************************************************
-		*****************************************************************************
-		**  If scanning interface is mon1 leave this code when port == 0  *************
-		*****************************************************************************
-		*****************************************************************************/	  
-	  
+ 
     if (p->length() < sizeof(struct click_wifi)) {
       p->kill();
       return;
@@ -1648,6 +1746,10 @@ OdinAgent::push(int port, Packet *p)
 	*****************************************************************************/
   }
   else if (port == 1) {
+	/****************************************************************************
+	*****************************************************************************
+	*****************************************************************************
+	*****************************************************************************/
     // This means that the packet is coming from the higher layer,
     // so we simply filter by VAP and push out with the appropriate
     // bssid and wifi-encapsulation.
@@ -1660,24 +1762,7 @@ OdinAgent::push(int port, Packet *p)
     if (_sta_mapping_table.find (eth) != _sta_mapping_table.end ())
     {
       OdinStationState oss = _sta_mapping_table.get (eth);
-      // If the client tried to make an ARP request for
-      // its default gateway, and there is a response coming from
-      // upstream, we have to correct the resolved hw-addr with the
-      // VAP-BSSID to which the client corresponds.
-      // This assumes there is an ARP responder element upstream
-      // that can handle the _default_gw_addr
-      //if (ntohs(e->ether_type) == ETHERTYPE_ARP) {
-      //  click_ether_arp *ea = (click_ether_arp *) (e + 1);
-      //  if (ntohs(ea->ea_hdr.ar_hrd) == ARPHRD_ETHER
-      //      && ntohs(ea->ea_hdr.ar_pro) == ETHERTYPE_IP
-      //      && ntohs(ea->ea_hdr.ar_op) == ARPOP_REPLY) {
-
-      //    IPAddress ipa = IPAddress(ea->arp_spa);
-      //    if (ipa == _default_gw_addr)
-      //      memcpy(ea->arp_sha, oss._vap_bssid.data(), 6);
-      //  }
-      //}
-
+      
 	  // Add wifi header
       Packet *p_out = wifi_encap (p, oss._vap_bssid);
       // Update Tx statistics with this packet
@@ -1686,13 +1771,14 @@ OdinAgent::push(int port, Packet *p)
       return;
     }
   }
-
+	/****************************************************************************
+	*****************************************************************************
+	*****************************************************************************
+	*****************************************************************************/
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
-	if (_active_scanning) {
-	//if (true) { // For testing
+	if (_active_client_scanning == 1) {
 
 		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated \n");
-
 		if (p->length() < sizeof(struct click_wifi)) {
 			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> killing packet \n");
 		  p->kill();
@@ -1702,27 +1788,81 @@ OdinAgent::push(int port, Packet *p)
 		struct click_wifi *w = (struct click_wifi *) p->data();
 		EtherAddress src = EtherAddress(w->i_addr2);
 		if (src == _scanned_sta_mac) {
-			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> found packet for  %s\n", src.unparse_colon().c_str());
+			if (_debug_level % 10 > 1)
+                fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated --> found packet for  %s\n", src.unparse_colon().c_str());
+            
 			// Get station statistics
 			struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
-			// StationStats stat;
-			// HashTable<EtherAddress, StationStats>::const_iterator it = _rx_stats.find(src);
-			// if (it == _rx_stats.end())
-			//   stat = StationStats();
-			// else
-			//   stat = it.value();
-
-			// stat._rate = ceh->rate;
-			// stat._noise = ceh->silence;
-			// stat._signal = ceh->rssi + _signal_offset;
-			// stat._packets++;
-			// stat._last_received.assign_now();
-			_scanning_result = ceh->rssi + _signal_offset; // FIXME: cook this value
-			//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result);
+			_client_signal = ceh->rssi-256;
+            _client_signal_mW = pow (10, _client_signal / 10); // Lineal power
+            _client_avg_signal_mW = _client_avg_signal_mW  + ((_client_signal_mW  - _client_avg_signal_mW)/( _client_scanned_packets +1)); // Cumulative moving average
+            _client_scanned_packets++; // New packet
+            _client_avg_signal = 10.0*log10(_client_avg_signal_mW); // Lineal average power
+            _client_scanning_result = (int) round(_client_avg_signal) + 256 + _signal_offset; // Result
+			
+			if (_debug_level % 10 > 1){
+                fprintf(stderr, "[Odinagent.cc] ########### Packet number: %d\n",_client_scanned_packets);
+                fprintf(stderr, "[Odinagent.cc] ########### Signal(mW): %f - Signal(dBm): %f\n",_client_signal_mW, _client_signal);
+                fprintf(stderr, "[Odinagent.cc] ########### Average Signal(mW): %f - Average Signal(dBm): %f\n",_client_avg_signal_mW,_client_avg_signal);
+            }
 		}
-		//_scanning_result = 200; // For testing
-		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _scanning_result); // For testing
+		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Last power seen: --> %i\n", _client_scanning_result); // For testing
 	}
+
+	if (_active_AP_scanning == 1) {
+
+		if (p->length() < sizeof(struct click_wifi)) {
+		  p->kill();
+		  return;
+		}
+		
+		if (_scanning_SSID !="*") {
+
+			struct click_wifi *w = (struct click_wifi *) p->data();
+			type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
+			subtype = w->i_fc[0] & WIFI_FC0_SUBTYPE_MASK;
+
+			if ((type == WIFI_FC0_TYPE_MGT) && (subtype == WIFI_FC0_SUBTYPE_BEACON)) {
+			 	String ssid = recv_beacon (p);
+				if (_scanning_SSID == ssid) {		
+					APScanning APscan;
+					struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+					double signal_mW;
+					double avg_signal_mW;
+					int i = 0;
+				
+					for (Vector<OdinAgent::APScanning>::const_iterator iter = _APScanning_list.begin();
+						iter != _APScanning_list.end(); iter++) {
+					
+						APscan = *iter;
+						++i;
+						if (APscan.bssid == EtherAddress(w->i_addr2)) {
+							APscan.packets++; // number of packets
+							_APScanning_list.at(i-1).packets = APscan.packets; // update # packets
+							signal_mW = pow (10, (ceh->rssi + _signal_offset - 256) / 10);
+							avg_signal_mW  = pow (10, APscan.avg_signal / 10);
+							avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/APscan.packets);
+							APscan.avg_signal = 10*log10 (avg_signal_mW); // signal in dBm	
+							_APScanning_list.at(i-1).avg_signal = APscan.avg_signal; // update average signal
+							p->kill();
+							return;
+						}
+					}		
+					//Add 
+					APscan = APScanning();
+					APscan.bssid = EtherAddress(w->i_addr2);
+					APscan.packets++; // number of packets
+					signal_mW = pow (10, (ceh->rssi + _signal_offset - 256) / 10);
+					avg_signal_mW  = pow (10, APscan.avg_signal / 10);
+					avg_signal_mW = avg_signal_mW + ((signal_mW - avg_signal_mW)/APscan.packets);
+					APscan.avg_signal = 10*log10 (avg_signal_mW); // signal in dBm		
+					_APScanning_list.push_back (APscan);
+				}
+ 			}
+
+		}
+		else update_scanned_station_stats(p); // Update statistics of scanned stations
+	 }		
   }
   
   p->kill();
@@ -1763,7 +1903,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
   if(_subscription_list.size() == 0)
     return;
 
-    if (MULTICHANNEL_AGENTS == 1) {
+    if (_multichannel_agents == 1) {
        // if the MAC is not in the mapping table, end the function
 	   if (_sta_mapping_table.find (src) == _sta_mapping_table.end()) 
 		      return;
@@ -1847,7 +1987,7 @@ OdinAgent::match_against_subscriptions(StationStats stats, EtherAddress src)
       }
     }
 
-	if (matched) { //  && (_active_scanning == false)
+	if (matched) { 
 			if (sub.sta_addr != EtherAddress()) {
 			// It is a specific subscription for a single MAC (not '*')
     			// Calculate the time since the last publish was sent
@@ -1958,71 +2098,67 @@ OdinAgent::read_handler(Element *e, void *user_data)
 		// handler for transmission statistics
 		case handler_txstat: {
 
-			//Timestamp now = Timestamp::now();
-			Vector<EtherAddress> buf;
+		OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
+		Timestamp stats_time;
 
 			// the controller will get the tx statistics of all the STAs associated to this AP
 			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
-			for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
-						iter.live(); iter++) {
+		for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_tx_stats.begin();
+					iter.live(); iter++) {
 
-				OdinAgent::StationStats n = iter.value();
-				//Timestamp age = now - n._time_last_packet;
-
-				sa << iter.key().unparse_colon();
-        
-				sa << " packets:" << n._packets;
-				sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-				sa << " avg_signal:" << n._avg_signal; // signal in dBm
-				sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-				sa << " air_time:" << n._air_time; // time in seconds
-
-				sa << " first_received:" << n._time_first_packet; // time in long format
-				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+			OdinAgent::StationStats n = iter.value();
 		
-				// sa << " age:" << age << "\n";
-				buf.push_back (iter.key());
-			}	
-	  
-			for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
-			 agent->_tx_stats.erase (*iter);
-      
-			break;
+			sa << iter.key().unparse_colon();
+        
+			sa << " packets:" << n._packets;
+			sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+			sa << " avg_signal:" << n._avg_signal; // signal in dBm
+			sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+			sa << " air_time:" << n._air_time; // time in seconds
+
+			sa << " first_received:" << n._time_first_packet; // time in long format
+			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+		
+			stats_time = n._time_last_packet;
+			agent->_tx_stats.find(iter.key()).value() = reset_stats;
+			agent->_tx_stats.find(iter.key()).value()._time_first_packet = stats_time;
+			agent->_tx_stats.find(iter.key()).value()._time_last_packet = stats_time;
+		}	
+	  	
+		break;
     }
 
 		// handler for reception statistics
     case handler_rxstat: {
-      //Timestamp now = Timestamp::now();
-			Vector<EtherAddress> buf;
+
+      OdinAgent::StationStats reset_stats = OdinAgent::StationStats();
+	  Timestamp stats_time;
 
 			// the controller will get the rx statistics of all the STAs associated to this AP
 			//TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
-      for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_rx_stats.begin();
+		for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_rx_stats.begin();
           iter.live(); iter++) {
 
-        OdinAgent::StationStats n = iter.value();
-        //Timestamp age = now - n._time_last_packet;
+			OdinAgent::StationStats n = iter.value();
 
-        sa << iter.key().unparse_colon();
+			sa << iter.key().unparse_colon();
         
-				sa << " packets:" << n._packets;
-				sa << " avg_rate:" << n._avg_rate; // rate in Kbps
-        sa << " avg_signal:" << n._avg_signal; // signal in dBm
-        sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
-        sa << " air_time:" << n._air_time; // time in seconds
+			sa << " packets:" << n._packets;
+			sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+			sa << " avg_signal:" << n._avg_signal; // signal in dBm
+			sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+			sa << " air_time:" << n._air_time; // time in seconds
 
-				sa << " first_received:" << n._time_first_packet; // time in long format
-				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
-		
-        // sa << " age:" << age << "\n";
-				buf.push_back (iter.key());
-      }	
-	  
-			// as I have sent the statistics, I delete the records of all the MACs read
-			for (Vector<EtherAddress>::const_iterator iter = buf.begin(); iter != buf.end(); iter++)
-			 agent->_rx_stats.erase (*iter);
-      
-	  break;
+			sa << " first_received:" << n._time_first_packet; // time in long format
+			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+
+			stats_time = n._time_last_packet;
+			agent->_rx_stats.find(iter.key()).value() = reset_stats;
+			agent->_rx_stats.find(iter.key()).value()._time_first_packet = stats_time;
+			agent->_rx_stats.find(iter.key()).value()._time_last_packet = stats_time;
+		}	    
+
+		break;
     }
 
     case handler_subscriptions: {
@@ -2052,12 +2188,60 @@ OdinAgent::read_handler(Element *e, void *user_data)
     }
     
     case handler_scan_client: {
-          sa << agent->_scanning_result << "\n"; // Scanned result
-    	  agent->_active_scanning = false;// Disable scanning
-    	  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending scan results %i\n", agent->_scanning_result);
-          break;
-     }
-    
+	  // Disable scanning
+      agent->_active_client_scanning = 0;
+	  // Scanning result
+      sa << agent->_client_scanning_result << "\n"; 
+	  if (agent->_debug_level % 10 > 0)
+		  fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending STA scan results: %i (%i dBm)\n", agent->_client_scanning_result, (agent->_client_scanning_result)-256);
+	  if ( agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
+		 fprintf(stderr, "##################################################################\n\n");
+      break;
+    }
+    case handler_scan_APs: {
+	 // Disable scanning
+     agent->_active_AP_scanning = 0;
+     // Scanning result
+	  if (agent->_scanning_SSID =="*"){
+			  // the controller will get the rx statistics of all the scanned STAs
+			  //TODO: we could perhaps add another handler (write) which gets the statistics of a single MAC
+			  for (HashTable<EtherAddress, StationStats>::const_iterator iter = agent->_scanned_station_stats.begin();
+				  iter.live(); iter++) {
+
+				OdinAgent::StationStats n = iter.value();
+
+				sa << iter.key().unparse_colon();
+        
+				sa << " packets:" << n._packets;
+				sa << " avg_rate:" << n._avg_rate; // rate in Kbps
+				sa << " avg_signal:" << n._avg_signal; // signal in dBm
+				sa << " avg_len_pkt:" << n._avg_len_pkt; // length in bytes
+				sa << " air_time:" << n._air_time; // time in seconds
+
+				sa << " first_received:" << n._time_first_packet; // time in long format
+				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+
+			  }
+	  }
+	  else {
+			 for (Vector<OdinAgent::APScanning>::const_iterator iter = agent->_APScanning_list.begin();
+					 iter != agent->_APScanning_list.end(); iter++) {      
+						OdinAgent::APScanning APscan = *iter;
+						sa << APscan.bssid.unparse_colon();
+						sa << " avg_signal:" << APscan.avg_signal << "\n"; // signal in dBm
+			 } 
+	      }
+	 
+	 if (agent->_debug_level % 10 > 0)
+            fprintf(stderr, "[Odinagent.cc] ########### Scanning: Sending AP scanning values \n");
+     break;
+    }
+	case handler_scanning_flags: { 
+	  sa << agent->_active_client_scanning << " " << agent->_active_AP_scanning << " " << agent->_active_measurement_beacon << "\n";;
+	  if (agent->_debug_level % 10 > 0)
+		fprintf(stderr, "[Odinagent.cc] ########### Read scanning flags --> ClientScanningFlag: %i   APScanningFlag: %i    measurementBeaconFlag: %i\n", agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
+      break;
+    }
   }
 
   return sa.take_string();
@@ -2381,6 +2565,9 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
       break;
     }
     case handler_scan_client: { // need testing
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
+			break; //FIXME
+		}
     	EtherAddress sta_mac;
     	int scan_channel;
     	int frequency;
@@ -2392,25 +2579,133 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
     	{
     		return -1;
     	}
+		
+		if (agent->_debug_level / 10 == 1)		// demo mode. I print more visual information
+           fprintf(stderr, "##################################################################\n");
+		
     	if (agent->_debug_level % 10 > 0)
     		fprintf(stderr, "[Odinagent.cc] ########### Scanning for client %s\n", sta_mac.unparse_colon().c_str());
+		// Set channel to scan
     	frequency = agent->convert_channel_to_frequency(scan_channel);
-    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " &";
-    	fprintf(stderr, "[Odinagent.cc] ########### Scanning: Testing command line --> %s\n", sa.c_str()); // for testing
-    	if (agent->_channel_aux != scan_channel) {
-    		agent->_channel_aux = scan_channel;
+    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " > /dev/null";
+    	if (agent->_debug_level % 10 > 0)
+			fprintf(stderr, "[Odinagent.cc] ########### Scanning for client: Testing command line --> %s\n", sa.c_str()); // for testing
+    	if (agent->_scan_channel != scan_channel) {
+    		agent->_scan_channel = scan_channel;
     		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
-    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting channel to scan in auxiliary interface \n"); // for testing
+    		if (agent->_debug_level % 10 > 0)
+				fprintf(stderr, "[Odinagent.cc] ########### Scanning for client: Setting channel to scan in auxiliary interface \n"); // for testing
     	}
-    	if (agent->_active_scanning != true) { // Do not scan if we are scanning a previous STA
-    		agent->_scanning_result = 0;
-    		agent->_scanned_sta_mac = sta_mac;
-    		agent->_active_scanning = true; // Enable scanning (FIXME: time to begin this action)
-    		fprintf(stderr, "[Odinagent.cc] ########### Scanning: Setting scanning --> true \n"); // for testing
-    	}
+ 		agent->_client_scanning_result = 0;
+    	agent->_scanned_sta_mac = sta_mac;
+		agent->_client_scanned_packets = 0;
+        agent->_client_avg_signal_mW = 0;
+    	agent->_active_client_scanning = 1; // Enable scanning (FIXME: time to begin this action)
+    	if (agent->_debug_level % 10 > 0)
+				fprintf(stderr, "[Odinagent.cc] ########### Scanning for client: Setting scanning --> true \n"); // for testing
     	break;
     }
-    
+
+    case handler_scan_APs: { 
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
+			break; //FIXME
+		}
+        String ssid;
+    	int scan_channel;
+    	int frequency;
+		//int interval;
+		StringAccum sa;
+    	if (Args(agent, errh).push_back_words(str)
+    	    .read_mp("SSID", ssid)
+    	    .read_mp("CHANNEL", scan_channel)
+    	    //.read_mp("INTERVAL", interval)
+    	    .complete() < 0)
+    	{
+    		return -1;
+    	}
+    	if (agent->_debug_level % 10 > 0)
+    		fprintf(stderr, "[Odinagent.cc] ########### Scanning for APs (SSID %s) in channel %d\n", ssid.c_str(),scan_channel);
+		// Set channel to scan
+    	frequency = agent->convert_channel_to_frequency(scan_channel);
+    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " > /dev/null";
+    	if (agent->_debug_level % 10 > 0)
+			fprintf(stderr, "[Odinagent.cc] ########### Scanning for APs: Testing command line --> %s\n", sa.c_str()); // for testing
+    	if (agent->_scan_channel != scan_channel) {
+    		agent->_scan_channel = scan_channel;
+    		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
+    		if (agent->_debug_level % 10 > 0)
+				fprintf(stderr, "[Odinagent.cc] ########### Scanning for APs: Setting channel to scan in auxiliary interface \n"); // for testing
+    	}
+ 	
+    	// Enable scanning (FIXME: time to begin this action)
+    	agent->_active_AP_scanning = 1;
+    	agent->_scanning_SSID = ssid;
+		//agent->_AP_scanning_interval = interval;
+		if (agent->_scanning_SSID =="*")
+    		 agent->_scanned_station_stats.clear();
+		else agent->_APScanning_list.clear();
+    	break;
+    }
+    case handler_send_measurement_beacon: { // need testing
+    	if (agent->_active_client_scanning == 1 || agent->_active_AP_scanning == 1 || agent->_active_measurement_beacon == 1) {
+			break; //FIXME
+		}
+		String ssid;
+    	int scan_channel;
+		int frequency;
+		//int interval;
+		StringAccum sa;
+    	if (Args(agent, errh).push_back_words(str)
+    	    .read_mp("SSID", ssid)
+    	    .read_mp("CHANNEL", scan_channel)
+    	   // .read_mp("INTERVAL", interval)
+    	    .complete() < 0)
+    	{
+    		return -1;
+    	}
+    	if (agent->_debug_level % 10 > 0)
+    		fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon (SSID %s) in channel %d\n", ssid.c_str(),scan_channel);
+    	
+		// Set channel to send
+    	frequency = agent->convert_channel_to_frequency(scan_channel);
+    	sa << "hostapd_cli -i wlan1 chan_switch 0 " << frequency << " > /dev/null";
+    	if (agent->_debug_level % 10 > 0)
+			fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon: Testing command line --> %s\n", sa.c_str()); // for testing
+    	if (agent->_scan_channel != scan_channel) {
+    		agent->_scan_channel = scan_channel;
+    		system(sa.c_str()); // Set channel to scan in wlan1 (auxiliary)
+    		if (agent->_debug_level % 10 > 0)
+				fprintf(stderr, "[Odinagent.cc] ########### Send measurement beacon: command line --> %s\n", sa.c_str()); // for testing
+    	}
+
+    	// Enable measurement beacon (FIXME: time to begin this action)
+		agent->_active_measurement_beacon = 1;
+		agent->_measurement_beacon_SSID = ssid; 
+		//agent->_measurement_beacon_interval = interval;
+		//agent->_num_measurement_beacon = 0;
+    	break;
+    }
+	case handler_scanning_flags: { 
+      int client_scanning_flag;
+      int AP_scanning_flag;
+      int measurement_beacon_flag;
+      if (Args(agent, errh).push_back_words(str)
+        .read_mp("ClientScanningFlag", client_scanning_flag)
+        .read_mp("APScanningFlag", AP_scanning_flag)
+        .read_mp("measurementBeaconFlag", measurement_beacon_flag)
+        .complete() < 0)
+        {
+          return -1;
+        }
+	  //Set scanning to do
+      agent->_active_client_scanning = client_scanning_flag;
+      agent->_active_AP_scanning = AP_scanning_flag;
+      agent->_active_measurement_beacon = measurement_beacon_flag;
+	  if (agent->_debug_level % 10 > 0)
+				fprintf(stderr, "[Odinagent.cc] ########### Changing scanning flags --> ClientScanningFlag:%i   APScanningFlag:%i    measurementBeaconFlag:%i\n", 
+				                 agent->_active_client_scanning, agent->_active_AP_scanning, agent->_active_measurement_beacon);
+      break;
+    }   
   }
   return 0;
 }
@@ -2428,6 +2723,8 @@ OdinAgent::add_handlers()
   add_read_handler("debug", read_handler, handler_debug);
   add_read_handler("report_mean", read_handler, handler_report_mean);
   add_read_handler("scan_client", read_handler, handler_scan_client);
+  add_read_handler("scan_APs", read_handler, handler_scan_APs);
+  add_read_handler("scanning_flags", read_handler, handler_scanning_flags);
 
   add_write_handler("add_vap", write_handler, handler_add_vap);
   add_write_handler("set_vap", write_handler, handler_set_vap);
@@ -2442,6 +2739,10 @@ OdinAgent::add_handlers()
   add_write_handler("signal_strength_offset", write_handler, handler_signal_strength_offset);
   add_write_handler("channel_switch_announcement", write_handler, handler_channel_switch_announcement);
   add_write_handler("scan_client", write_handler, handler_scan_client);
+  add_write_handler("scan_APs", write_handler, handler_scan_APs);
+  add_write_handler("send_measurement_beacon", write_handler, handler_send_measurement_beacon);
+  add_write_handler("scanning_flags", write_handler, handler_scanning_flags);
+
 }
 
 /* This debug function prints info about clients */
@@ -2532,7 +2833,148 @@ OdinAgent::print_stations_state()
 	}
 }
 
-/* This function erases the rx_stats of old clients */
+
+/* Thread for general purpose (i.e. print debug info about them)*/
+void misc_thread(Timer *timer, void *data){
+
+    OdinAgent *agent = (OdinAgent *) data;
+
+    agent->print_stations_state();
+
+    timer->reschedule_after_sec(RESCHEDULE_INTERVAL_GENERAL);
+
+}
+
+
+void
+OdinAgent::send_measurement_beacon () {
+
+  EtherAddress bssid = _hw_mac_addr;
+  String my_ssid = _measurement_beacon_SSID;
+
+  Vector<int> rates = _rtable->lookup(bssid);
+
+  /* order elements by standard
+   * needed by sloppy 802.11b driver implementations
+   * to be able to connect to 802.11g APs */
+  int max_len = sizeof (struct click_wifi) +
+    8 +                  /* timestamp */
+    2 +                  /* beacon interval */
+    2 +                  /* cap_info */
+    2 + my_ssid.length() + /* ssid */
+    2 + WIFI_RATES_MAXSIZE +  /* rates */
+    0;
+
+
+  WritablePacket *p = Packet::make(max_len);
+
+  if (p == 0)
+    return;
+
+  struct click_wifi *w = (struct click_wifi *) p->data();
+
+  w->i_fc[0] = WIFI_FC0_VERSION_0 | WIFI_FC0_TYPE_MGT;
+  w->i_fc[0] |=  WIFI_FC0_SUBTYPE_BEACON;
+  w->i_fc[1] = WIFI_FC1_DIR_NODS;
+
+  memcpy(w->i_addr1, "FF:FF:FF:FF:FF:FF", 6);
+  memcpy(w->i_addr2, bssid.data(), 6);
+  memcpy(w->i_addr3, bssid.data(), 6);
+
+  w->i_dur = 0;
+  w->i_seq = 0;
+
+  uint8_t *ptr;
+
+  ptr = (uint8_t *) p->data() + sizeof(struct click_wifi);
+  int actual_length = sizeof (struct click_wifi);
+
+
+  /* timestamp is set in the hal. ??? */
+  memset(ptr, 0, 8);
+  ptr += 8;
+  actual_length += 8;
+
+  /* beacon interval */
+  uint16_t beacon_int = (uint16_t) _interval_ms_measurement_beacon;
+  *(uint16_t *)ptr = cpu_to_le16(beacon_int);
+  ptr += 2;
+  actual_length += 2;
+
+  // Capability information
+  uint16_t cap_info = 0;
+  cap_info |= WIFI_CAPINFO_ESS;
+  *(uint16_t *)ptr = cpu_to_le16(cap_info);
+  ptr += 2;
+  actual_length += 2;
+
+  /* ssid */
+  ptr[0] = WIFI_ELEMID_SSID;
+  ptr[1] = my_ssid.length();
+  memcpy(ptr + 2, my_ssid.data(), my_ssid.length());
+  ptr += 2 + my_ssid.length();
+  actual_length += 2 + my_ssid.length();
+
+  /* rates */
+  ptr[0] = WIFI_ELEMID_RATES;
+  ptr[1] = WIFI_MIN(WIFI_RATE_SIZE, rates.size());
+  for (int x = 0; x < WIFI_MIN(WIFI_RATE_SIZE, rates.size()); x++) {
+    ptr[2 + x] = (uint8_t) rates[x];
+
+    if (rates[x] == 2) {
+      ptr [2 + x] |= WIFI_RATE_BASIC;
+    }
+
+  }
+  ptr += 2 + WIFI_MIN(WIFI_RATE_SIZE, rates.size());
+  actual_length += 2 + WIFI_MIN(WIFI_RATE_SIZE, rates.size());
+
+
+  p->take(max_len - actual_length);
+
+  output(4).push(p);
+}
+
+
+
+/* Thread for mon1 scanning interface (AP scanning, send measurement beacon, ...) */
+void scanning_thread(Timer *timer, void *data){
+
+    OdinAgent *agent = (OdinAgent *) data;
+
+	// measurement beacon
+	if (agent->_active_measurement_beacon == 1) 
+		 agent->send_measurement_beacon ();
+
+    /*if (agent->_active_measurement_beacon) {
+		if ((agent->_num_intervals_for_measurement_beacon % (RESCHEDULE_INTERVAL_measurement_BEACON / RESCHEDULE_INTERVAL_SCANNING)) == 0) {
+			agent->send_measurement_beacon ();
+			++(agent->_num_measurement_beacon);
+		    if (agent->_num_measurement_beacon > (agent->_measurement_beacon_interval/RESCHEDULE_INTERVAL_measurement_BEACON)) { 
+				agent->_active_measurement_beacon = false; //When interval time had finished
+				agent->_num_intervals_for_measurement_beacon = 1;
+			}
+		}
+		if (agent->_active_measurement_beacon)
+			++agent->_num_intervals_for_measurement_beacon;
+	}*/
+	
+	// AP Scanning
+	/*if (agent->_active_AP_scanning) {
+		if (agent->_AP_scanning_interval - (RESCHEDULE_INTERVAL_SCANNING*agent->_num_intervals_for_AP_scanning) < 0 ){
+			agent->_active_AP_scanning = false;
+			agent->_num_intervals_for_AP_scanning = 0;
+		}
+
+		if (agent->_active_AP_scanning)
+			++(agent->_num_intervals_for_AP_scanning);
+	}*/
+
+    timer->reschedule_after_msec(agent->_interval_ms_measurement_beacon);
+}
+
+
+/* This function erases old statistics from station not associated. It also erases old lvaps from inactive stations */
 void
 cleanup_lvap (Timer *timer, void *data)
 {
@@ -2540,18 +2982,21 @@ cleanup_lvap (Timer *timer, void *data)
     OdinAgent *agent = (OdinAgent *) data;
     Vector<EtherAddress> buf;
 
-    // Clear out old rxstat entries.
+
     for (HashTable<EtherAddress, OdinAgent::StationStats>::const_iterator iter = agent->_rx_stats.begin();
     iter.live(); iter++){
 
+       // Clear out rxstat entries from station not associated
+		if (agent->_sta_mapping_table.find(iter.key()) == agent->_sta_mapping_table.end()) {
+			buf.push_back (iter.key());
+			continue;
+		}
+
         Timestamp now = Timestamp::now();
         Timestamp age = now - iter.value()._time_last_packet;
-
-        if (age.sec() > THRESHOLD_OLD_STATS){
-            buf.push_back (iter.key());
-        }
+		
         //If out station has been inactive longer than the given threshold we remove the lvap and info at the master, then the stats will be removed too
-        if(age > THRESHOLD_REMOVE_LVAP && agent->_sta_mapping_table.find(iter.key()) != agent->_sta_mapping_table.end()){
+        if(age.sec() > THRESHOLD_REMOVE_LVAP){
 
             // Notify the master to remove client info and lvap, then agent clears the lvap
             StringAccum sa;
@@ -2573,25 +3018,16 @@ cleanup_lvap (Timer *timer, void *data)
         if(agent->_sta_mapping_table.find(*iter) != agent->_sta_mapping_table.end())
             continue;
 
-				if (agent->_debug_level % 10 > 1)
+		if (agent->_debug_level % 10 > 1)
 					fprintf(stderr, "[Odinagent.cc]   station with MAC addr: %s\n", iter->unparse_colon().c_str());
         agent->_rx_stats.erase (*iter);
+		agent->_tx_stats.erase (*iter);
     }
 
-    agent->_packet_buffer.clear();
+    //agent->_packet_buffer.clear();
     timer->reschedule_after_sec(RESCHEDULE_INTERVAL_STATS);
 }
 
-/* Thread for general purpose (i.e. print debug info about them)*/
-void misc_thread(Timer *timer, void *data){
-
-    OdinAgent *agent = (OdinAgent *) data;
-
-    agent->print_stations_state();
-
-    timer->reschedule_after_sec(RESCHEDULE_INTERVAL_GENERAL);
-
-}
 
 /*Miscellaneous*/
 int
