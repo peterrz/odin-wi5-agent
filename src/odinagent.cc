@@ -67,8 +67,8 @@ OdinAgent::OdinAgent()
   _tx_power(0),
   _hidden(0),
   _multichannel_agents(1),
-  _interval_ms_default(100),          // Inter-Beacon Interval for normal mode
-  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode  
+  _interval_ms_default(10),          // Inter-Beacon Interval for normal mode
+  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -1456,6 +1456,7 @@ OdinAgent::update_tx_stats(Packet *p)
 
 	// store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
+  stat._equipment = "AP";
 
 	/*
   if (_debug_level % 10 > 1){
@@ -1531,6 +1532,17 @@ OdinAgent::update_rx_stats(Packet *p)
         fclose(fp);
   }
 	*/
+  
+  uint8_t fromDs;
+  
+  fromDs = w->i_fc[1] & WIFI_FC1_DIR_FROMDS;
+
+  if (fromDs == WIFI_FC1_DIR_FROMDS) {
+    stat._equipment = "AP";
+      
+  }else{
+    stat._equipment = "STA";
+  }
   match_against_subscriptions(stat, src);
 
 	// update the statistics table
@@ -1591,6 +1603,17 @@ OdinAgent::update_scanned_station_stats(Packet *p)
 
   // store the timestamp of this packet as the one of the last packet
   stat._time_last_packet.assign_now();
+
+  uint8_t fromDs;
+  
+  fromDs = w->i_fc[1] & WIFI_FC1_DIR_FROMDS;
+
+  if (fromDs == WIFI_FC1_DIR_FROMDS) {
+    stat._equipment = "AP";
+      
+  }else{
+    stat._equipment = "STA";
+  }
 
  // update the statistics table
   _scanned_station_stats.set (src, stat);
@@ -2117,7 +2140,9 @@ OdinAgent::read_handler(Element *e, void *user_data)
 			sa << " air_time:" << n._air_time; // time in seconds
 
 			sa << " first_received:" << n._time_first_packet; // time in long format
-			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+			sa << " last_received:" << n._time_last_packet; // time in long format
+            
+            sa << " equipment:" << n._equipment << "\n"; // type of equipment
 		
 			stats_time = n._time_last_packet;
 			agent->_tx_stats.find(iter.key()).value() = reset_stats;
@@ -2150,7 +2175,9 @@ OdinAgent::read_handler(Element *e, void *user_data)
 			sa << " air_time:" << n._air_time; // time in seconds
 
 			sa << " first_received:" << n._time_first_packet; // time in long format
-			sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+			sa << " last_received:" << n._time_last_packet; // time in long format
+            
+            sa << " equipment:" << n._equipment << "\n"; // type of equipment
 
 			stats_time = n._time_last_packet;
 			agent->_rx_stats.find(iter.key()).value() = reset_stats;
@@ -2219,7 +2246,9 @@ OdinAgent::read_handler(Element *e, void *user_data)
 				sa << " air_time:" << n._air_time; // time in seconds
 
 				sa << " first_received:" << n._time_first_packet; // time in long format
-				sa << " last_received:" << n._time_last_packet << "\n"; // time in long format
+				sa << " last_received:" << n._time_last_packet; // time in long format
+                
+                sa << " equipment:" << n._equipment << "\n"; // type of equipment
 
 			  }
 	  }

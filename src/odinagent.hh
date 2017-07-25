@@ -155,6 +155,7 @@ public:
 	double _air_time;			//airtime consumed by this STA, calculated as 8 * _len_pkt / _rate
 	Timestamp _time_first_packet;	//timestamp of the first packet included in the statistics
     Timestamp _time_last_packet;		//timestamp of the last packet included in the statistics
+    String _equipment;      //identify the equipment that transmit
     StationStats() {
       memset(this, 0, sizeof(*this));
     }
