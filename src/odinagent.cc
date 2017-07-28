@@ -32,6 +32,10 @@
 #include <stdio.h>
 #include <math.h>
 
+#include <click/etheraddress.hh> // stats to file
+#include <sys/stat.h>
+#include <fstream>
+
 CLICK_DECLS
 
 
@@ -41,7 +45,7 @@ void cleanup_lvap(Timer *timer, void *);
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 30; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 30; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
+uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds FIXME add to .cli
 
 void scanning_thread(Timer *timer, void *);
 
@@ -67,8 +71,11 @@ OdinAgent::OdinAgent()
   _tx_power(0),
   _hidden(0),
   _multichannel_agents(1),
-  _interval_ms_default(10),          // Inter-Beacon Interval for normal mode
-  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode
+  _interval_ms_default(10),             // Inter-Beacon Interval for normal mode
+  _interval_ms_burst(10),               // Inter-Beacon Interval for burst mode
+  _interval_ms_measurement_beacon(100),
+  _capture_mode(0),                     // Capture mode, radiotap statictics will be stored in file
+  _capture_mac_str("")
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -162,8 +169,12 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("DEFAULT_BEACON_INTERVAL", _interval_ms_default)
   .read_m("BURST_BEACON_INTERVAL", _interval_ms_burst)
   .read_m("MEASUREMENT_BEACON_INTERVAL", _interval_ms_measurement_beacon)
+  .read_m("CAPTURE_MODE",_capture_mode)
+  .read_m("MAC_CAPTURE",_capture_mac)
   .complete() < 0)
   return -1;
+  
+  _capture_mac_str = _capture_mac.unparse_colon().c_str();
 
   // Put the correct value in the variable after reading
   _interval_ms = _interval_ms_default;
@@ -1619,6 +1630,56 @@ OdinAgent::update_scanned_station_stats(Packet *p)
   _scanned_station_stats.set (src, stat);
 }
 
+/**
+ * Check if the file where mon power is saved is already created
+ */
+inline bool OdinAgent::exists_file (String name) {
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
+
+/**
+ * Save to file all the packet statistics
+ */
+void
+OdinAgent::stats_to_file(Packet *p, String filename)
+{
+    // Always after a similar check
+    /*if (p->length() < sizeof(struct click_wifi)) {
+		  p->kill();
+		  return;
+	}*/
+    std::ofstream fp;
+    char rssi [3];
+    char rate [4];
+    char seq [6];
+    
+    if(!exists_file(filename.c_str())){
+        fp.open ( filename.c_str() , std::ofstream::out);
+        if (fp.is_open()){
+            fp << "Time(sec);Src;Dst;Bssid;Seq;Rate(Mbs);Signal(mW);\n";
+        }else{std::cout << "Unable to open file";}
+    }else{
+        fp.open ( filename.c_str() , std::ofstream::out | std::ofstream::app);
+    }
+    struct click_wifi *w = (struct click_wifi *) p->data();
+    struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+    Timestamp time;
+    time.assign_now();                                  // FIXME use new radiotapdecap param
+    EtherAddress dst = EtherAddress(w->i_addr1);
+    EtherAddress src = EtherAddress(w->i_addr2);
+    EtherAddress bssid = EtherAddress(w->i_addr3);
+    // FIXME add all the radiotapdecap params
+    sprintf (rssi, "%d",ceh->rssi); // convert to str
+    sprintf (rate, "%d",ceh->rate/2); // convert to str
+    sprintf (seq, "%d",le16_to_cpu(w->i_seq) >> WIFI_SEQ_SEQ_SHIFT); // convert to str, seq is little endian and once converted first byte is fragment
+    if (fp.is_open()){
+        fp << time.sec() << "," << time.subsec() << ";" << src.unparse_colon().c_str() << ";" << dst.unparse_colon().c_str() << ";" << bssid.unparse_colon().c_str() << ";" << seq << ";" << rate << ";" << rssi << ";\n";
+    }else{
+        std::cout << "Unable to open file";
+    }
+    fp.close();
+}
 
 /**
  * This element has three input ports and 4 output ports.
@@ -1652,6 +1713,8 @@ OdinAgent::push(int port, Packet *p)
   uint8_t subtype;
 
   if (port == 0) {
+      
+    
 	/****************************************************************************
 	*****************************************************************************
 	*****************************************************************************
@@ -1672,6 +1735,11 @@ OdinAgent::push(int port, Packet *p)
 
     // Update Rx statistics
     update_rx_stats(p);
+    
+    // Stats_to_file
+    if (_capture_mode == 1 && (( src == _capture_mac ) || (_capture_mac_str.equals("FF:FF:FF:FF:FF:FF")))) {
+        stats_to_file(p,"mon0power.txt");
+    }
 
     type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
     subtype = w->i_fc[0] & WIFI_FC0_SUBTYPE_MASK;
@@ -1724,40 +1792,39 @@ OdinAgent::push(int port, Packet *p)
         return;
       }
 
-			// Get the destination address
-			EtherAddress dst = EtherAddress(w->i_addr3);
+	  // Get the destination address
+	  EtherAddress dst = EtherAddress(w->i_addr3);
 
-			// if the destination address is a known LVAP
-			if (_sta_mapping_table.find (dst) != _sta_mapping_table.end()) {
+      // if the destination address is a known LVAP
+      if (_sta_mapping_table.find (dst) != _sta_mapping_table.end()) {
 
-				// Destination station is a Odin client
-				WritablePacket *p_out = 0;	// make the packet writable, to be sent to the network
-				p_out = p->uniqueify();
-				if (!p_out) {
-					return;
-				}
+        // Destination station is a Odin client
+        WritablePacket *p_out = 0;	// make the packet writable, to be sent to the network
+        p_out = p->uniqueify();
+		if (!p_out) {
+            return;
+        }
 		
-				// Wifi encapsulation
-				struct click_wifi *w_out = (struct click_wifi *) p_out->data();
+		// Wifi encapsulation
+		struct click_wifi *w_out = (struct click_wifi *) p_out->data();
+		memset(p_out->data(), 0, sizeof(click_wifi));
+		w_out->i_fc[0] = (uint8_t) (WIFI_FC0_VERSION_0 | WIFI_FC0_TYPE_DATA);
+		w_out->i_fc[1] = 0;
+		w_out->i_fc[1] |= (uint8_t) (WIFI_FC1_DIR_MASK & WIFI_FC1_DIR_FROMDS);
+			
+		// modify the MAC address fields of the Wi-Fi frame
+		OdinStationState oss = _sta_mapping_table.get (dst);
+		memcpy(w_out->i_addr1, dst.data(), 6);
+		memcpy(w_out->i_addr2, oss._vap_bssid.data(), 6);
+		memcpy(w_out->i_addr3, src.data(), 6);
 
-				memset(p_out->data(), 0, sizeof(click_wifi));
-				w_out->i_fc[0] = (uint8_t) (WIFI_FC0_VERSION_0 | WIFI_FC0_TYPE_DATA);
-				w_out->i_fc[1] = 0;
-				w_out->i_fc[1] |= (uint8_t) (WIFI_FC1_DIR_MASK & WIFI_FC1_DIR_FROMDS);
-				
-				// modify the MAC address fields of the Wi-Fi frame
-				OdinStationState oss = _sta_mapping_table.get (dst);
-				memcpy(w_out->i_addr1, dst.data(), 6);
-				memcpy(w_out->i_addr2, oss._vap_bssid.data(), 6);
-				memcpy(w_out->i_addr3, src.data(), 6);
+		// Update Tx statistics with this packet
+		update_tx_stats(p_out);
 
-				// Update Tx statistics with this packet
-				update_tx_stats(p_out);
-
-				// send the frame by the output number 2
-				output(2).push(p_out);
-				return;
-			}
+		// send the frame by the output number 2
+		output(2).push(p_out);
+		return;
+      }
 
       // There should be a WifiDecap element upstream.
       output(1).push(p);
@@ -1799,6 +1866,18 @@ OdinAgent::push(int port, Packet *p)
 	*****************************************************************************
 	*****************************************************************************/
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
+      
+    if (p->length() < sizeof(struct click_wifi)) {
+      p->kill();
+      return;
+    }  
+    struct click_wifi *w = (struct click_wifi *) p->data();
+
+    EtherAddress src = EtherAddress(w->i_addr2);
+    // Stats_to_file
+    if (_capture_mode == 1 && (( src == _capture_mac ) || (_capture_mac_str.equals("FF:FF:FF:FF:FF:FF")))) {
+        stats_to_file(p,"mon1power.txt");
+    }  
 	if (_active_client_scanning == 1) {
 
 		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated \n");
