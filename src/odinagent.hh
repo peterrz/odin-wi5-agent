@@ -204,6 +204,7 @@ public:
   double _client_signal_mW; // Packet power in mW
   double _client_avg_signal_mW; // Average packet power in mW
   double _client_avg_signal; // Average packet power in dBm
+  int _burst_after_addlvap; // Number of beacons to send after add_lvap
 
   //Scanning
   int _active_client_scanning; // To active STA scanning
@@ -247,6 +248,9 @@ public:
 
   // Agents use the same channel or agents use different channels
   int _multichannel_agents;  
+  
+  // CSA table
+  HashTable<EtherAddress, int> _csa_table;
 
 private:
   void compute_bssid_mask ();
