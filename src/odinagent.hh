@@ -24,6 +24,14 @@
 #include <click/ipaddress.hh>
 #include <click/deque.hh>
 #include <elements/wifi/availablerates.hh>
+
+#include <clicknet/ether.h>
+
+#include <click/bighashmap.hh>
+#include <click/glue.hh>
+
+#include <click/string.hh>
+
 CLICK_DECLS
 
 /*
@@ -196,6 +204,7 @@ public:
   double _client_signal_mW; // Packet power in mW
   double _client_avg_signal_mW; // Average packet power in mW
   double _client_avg_signal; // Average packet power in dBm
+  int _burst_after_addlvap; // Number of beacons to send after add_lvap
 
   //Scanning
   int _active_client_scanning; // To active STA scanning
@@ -238,7 +247,10 @@ public:
   void match_against_subscriptions(StationStats stats, EtherAddress src);
 
   // Agents use the same channel or agents use different channels
-  int _multichannel_agents;
+  int _multichannel_agents;  
+  
+  // CSA table
+  HashTable<EtherAddress, int> _csa_table;
 
 private:
   void compute_bssid_mask ();
@@ -258,6 +270,12 @@ private:
   int _tx_rate;
   int _tx_power;
   int _hidden;
+  /*Stats to file*/
+  int _capture_mode;
+  EtherAddress _capture_mac;
+  String _capture_mac_str;
+  bool exists_file(String name);
+  void stats_to_file(Packet *p, String filename);
 };
 
 

@@ -32,6 +32,10 @@
 #include <stdio.h>
 #include <math.h>
 
+#include <click/etheraddress.hh> // stats to file
+#include <sys/stat.h>
+#include <fstream>
+
 CLICK_DECLS
 
 
@@ -41,7 +45,7 @@ void cleanup_lvap(Timer *timer, void *);
 int RESCHEDULE_INTERVAL_GENERAL = 35; //time interval [sec] after which general_timer will be rescheduled
 int RESCHEDULE_INTERVAL_STATS = 30; //time interval [sec] after which general_timer will be rescheduled
 int THRESHOLD_REMOVE_LVAP = 30; //time interval [sec] after which an lvap will be removed if we didn't hear from the client
-uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds
+uint32_t THRESHOLD_PUBLISH_SENT = 1000000; //time interval [usec] after which a publish message can be sent again. e.g. THRESHOLD_PUBLISH_SENT = 100000 means 0.1seconds FIXME add to .cli
 
 void scanning_thread(Timer *timer, void *);
 
@@ -67,8 +71,12 @@ OdinAgent::OdinAgent()
   _tx_power(0),
   _hidden(0),
   _multichannel_agents(1),
-  _interval_ms_default(10),          // Inter-Beacon Interval for normal mode
-  _interval_ms_burst(10)      // Inter-Beacon Interval for burst mode
+  _interval_ms_default(10),             // Inter-Beacon Interval for normal mode
+  _interval_ms_burst(10),               // Inter-Beacon Interval for burst mode
+  _interval_ms_measurement_beacon(100),
+  _capture_mode(0),                     // Capture mode, radiotap statictics will be stored in file
+  _capture_mac_str(""),                 // Mac to capture
+  _burst_after_addlvap(5)               // Number of beacons to send after add_lvap or change channel
 {
   _clean_stats_timer.assign(&cleanup_lvap, (void *) this);
   _general_timer.assign (&misc_thread, (void *) this);
@@ -162,8 +170,13 @@ OdinAgent::configure(Vector<String> &conf, ErrorHandler *errh)
   .read_m("DEFAULT_BEACON_INTERVAL", _interval_ms_default)
   .read_m("BURST_BEACON_INTERVAL", _interval_ms_burst)
   .read_m("MEASUREMENT_BEACON_INTERVAL", _interval_ms_measurement_beacon)
+  .read_m("CAPTURE_MODE",_capture_mode)
+  .read_m("MAC_CAPTURE",_capture_mac)
+  .read_m("BURST",_burst_after_addlvap)
   .complete() < 0)
   return -1;
+  
+  _capture_mac_str = _capture_mac.unparse_colon().c_str();
 
   // Put the correct value in the variable after reading
   _interval_ms = _interval_ms_default;
@@ -292,22 +305,26 @@ OdinAgent::add_vap (EtherAddress sta_mac, IPAddress sta_ip, EtherAddress sta_bss
     _beacon_timer.schedule_after_msec(_interval_ms);
 
     //sleep(50);
-    for (int j = 1; j <= 40; j++) { // Send 40 beacons, help in the case of a channel switch
-   	
-	if (it.value() == "") {
-    		for (int i = 0; i < oss._vap_ssids.size(); i++) {
-    			send_beacon(sta_mac, oss._vap_bssid, oss._vap_ssids[i], true);
-    		}
-    	}
-    	else {
-    		for (int i = 0; i < oss._vap_ssids.size(); i++) {
-    			if (oss._vap_ssids[i] == it.value()) {
-    				send_beacon(sta_mac, oss._vap_bssid, it.value(), true);
-    				break;
-    			}
-    		}
-    	}
-    
+    //sleep(50);
+    for (int j = 1; j <= _burst_after_addlvap; j++) { // Send beacons, help in the case of a channel switch
+        
+        if (it.value() == "") {
+            for (int i = 0; i < oss._vap_ssids.size(); i++) {
+                send_beacon(sta_mac, oss._vap_bssid, oss._vap_ssids[i], true);
+                if (_debug_level % 10 > 1)
+                  fprintf(stderr, "[Odinagent.cc] Send beacons (active scanning with broadcast ssid): %i\n",j);
+            }
+        }
+        else {
+            for (int i = 0; i < oss._vap_ssids.size(); i++) {
+                if (oss._vap_ssids[i] == it.value()) {
+                    send_beacon(sta_mac, oss._vap_bssid, it.value(), true);
+                    if (_debug_level % 10 > 1)
+                      fprintf(stderr, "[Odinagent.cc] Send beacons (active scanning with unicast ssid): %i\n",j);
+                    break;
+                }
+            }
+        }
     }
     _packet_buffer.erase(it.key());
     _interval_ms = _interval_ms_default;	//Increasing beacon interval again to default value
@@ -643,10 +660,16 @@ OdinAgent::recv_probe_request (Packet *p)
  */
 void
 OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bool probe) {
-	if ( _csa == true && !(probe) ) { // For channel switch announcement
+    
+    HashTable<EtherAddress, int>::const_iterator it = _csa_table.find(dst);
+    
+	// if ( _csa == true && !(probe) ) { // For channel switch announcement
+    if (it != _csa_table.end() && !(probe)) {
+        
+        int count_csa_beacon = it.value();
 	  
 		if (_debug_level % 10 > 0)
-			fprintf(stderr, "[Odinagent.cc] #################### Sending beacon for csa\n");// For testing only
+			fprintf(stderr, "[Odinagent.cc] #################### Sending csa beacon (%i) to STA: %s\n",count_csa_beacon, dst.unparse_colon().c_str());// For testing only
 	  
 		/* send_beacon after channel switch */
 	  Vector<int> rates = _rtable->lookup(bssid);
@@ -702,10 +725,10 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
 	  ptr += 8;
 	  actual_length += 8;
 	  
-	  /*This interval  is the BI expected in the other channel by the STA*/
+	  /*This interval  is the BI expected in the other channel by the STA*/ // FIXME
 	  _interval_ms=_interval_ms_burst;
 
-	  uint16_t beacon_int = (uint16_t) _interval_ms;
+	  uint16_t beacon_int = (uint16_t) _interval_ms; // FIXME
 	  *(uint16_t *)ptr = cpu_to_le16(beacon_int);
 	  ptr += 2;
 	  actual_length += 2;
@@ -763,7 +786,8 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
 	  ptr[1] = 3; 	// Length
 	  ptr[2] = 0; 	// Channel Switch Mode
 	  ptr[3] = _new_channel; 	// New Channel Number
-	  ptr[4] = _count_csa_beacon--; // Countdown
+	  //ptr[4] = _count_csa_beacon--; // Countdown
+	  ptr[4] = count_csa_beacon--; // Countdown // FIXME
 	  ptr += 5;
 	  actual_length += 5;
 
@@ -807,7 +831,11 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
 	  }
 
 	  output(0).push(p);
-	  _interval_ms = _interval_ms_default;
+	  _interval_ms = _interval_ms_default; // FIXME
+      _csa_table.erase(it.key());
+      if ( count_csa_beacon >= 0 ) {
+        _csa_table.set(dst,count_csa_beacon);
+      }
 	}
 
 	else { // For NO channel switch announcement or probe responder
@@ -986,11 +1014,13 @@ OdinAgent::send_beacon (EtherAddress dst, EtherAddress bssid, String my_ssid, bo
   }*/
   
   /* Reset counters after channel switch */
-  if ( _count_csa_beacon < 0 ) {
-    	  _count_csa_beacon = _count_csa_beacon_default;
-	  //_csa_count = _csa_count_default;
-	  _csa = false;
-  }
+  /*if ( _count_csa_beacon < 0 ) {
+  if (it.value() < 0 ) {
+    _count_csa_beacon = _count_csa_beacon_default;
+	//_csa_count = _csa_count_default;
+	//_csa = false;
+    _csa_table.erase(it.key());
+  }*/
 	
 
 }
@@ -1619,6 +1649,56 @@ OdinAgent::update_scanned_station_stats(Packet *p)
   _scanned_station_stats.set (src, stat);
 }
 
+/**
+ * Check if the file where mon power is saved is already created
+ */
+inline bool OdinAgent::exists_file (String name) {
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
+
+/**
+ * Save to file all the packet statistics
+ */
+void
+OdinAgent::stats_to_file(Packet *p, String filename)
+{
+    // Always after a similar check
+    /*if (p->length() < sizeof(struct click_wifi)) {
+		  p->kill();
+		  return;
+	}*/
+    std::ofstream fp;
+    char rssi [3];
+    char rate [4];
+    char seq [6];
+    
+    if(!exists_file(filename.c_str())){
+        fp.open ( filename.c_str() , std::ofstream::out);
+        if (fp.is_open()){
+            fp << "Time(sec);Src;Dst;Bssid;Seq;Rate(Mbs);Signal(mW);\n";
+        }else{std::cout << "Unable to open file";}
+    }else{
+        fp.open ( filename.c_str() , std::ofstream::out | std::ofstream::app);
+    }
+    struct click_wifi *w = (struct click_wifi *) p->data();
+    struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p);
+    Timestamp time;
+    time.assign_now();                                  // FIXME use new radiotapdecap param
+    EtherAddress dst = EtherAddress(w->i_addr1);
+    EtherAddress src = EtherAddress(w->i_addr2);
+    EtherAddress bssid = EtherAddress(w->i_addr3);
+    // FIXME add all the radiotapdecap params
+    sprintf (rssi, "%d",ceh->rssi); // convert to str
+    sprintf (rate, "%d",ceh->rate/2); // convert to str
+    sprintf (seq, "%d",le16_to_cpu(w->i_seq) >> WIFI_SEQ_SEQ_SHIFT); // convert to str, seq is little endian and once converted first byte is fragment
+    if (fp.is_open()){
+        fp << time.sec() << "," << time.subsec() << ";" << src.unparse_colon().c_str() << ";" << dst.unparse_colon().c_str() << ";" << bssid.unparse_colon().c_str() << ";" << seq << ";" << rate << ";" << rssi << ";\n";
+    }else{
+        std::cout << "Unable to open file";
+    }
+    fp.close();
+}
 
 /**
  * This element has three input ports and 4 output ports.
@@ -1652,6 +1732,8 @@ OdinAgent::push(int port, Packet *p)
   uint8_t subtype;
 
   if (port == 0) {
+      
+    
 	/****************************************************************************
 	*****************************************************************************
 	*****************************************************************************
@@ -1672,6 +1754,11 @@ OdinAgent::push(int port, Packet *p)
 
     // Update Rx statistics
     update_rx_stats(p);
+    
+    // Stats_to_file
+    if (_capture_mode == 1 && (( src == _capture_mac ) || (_capture_mac_str.equals("FF:FF:FF:FF:FF:FF")))) {
+        stats_to_file(p,"mon0power.txt");
+    }
 
     type = w->i_fc[0] & WIFI_FC0_TYPE_MASK;
     subtype = w->i_fc[0] & WIFI_FC0_SUBTYPE_MASK;
@@ -1724,40 +1811,39 @@ OdinAgent::push(int port, Packet *p)
         return;
       }
 
-			// Get the destination address
-			EtherAddress dst = EtherAddress(w->i_addr3);
+	  // Get the destination address
+	  EtherAddress dst = EtherAddress(w->i_addr3);
 
-			// if the destination address is a known LVAP
-			if (_sta_mapping_table.find (dst) != _sta_mapping_table.end()) {
+      // if the destination address is a known LVAP
+      if (_sta_mapping_table.find (dst) != _sta_mapping_table.end()) {
 
-				// Destination station is a Odin client
-				WritablePacket *p_out = 0;	// make the packet writable, to be sent to the network
-				p_out = p->uniqueify();
-				if (!p_out) {
-					return;
-				}
+        // Destination station is a Odin client
+        WritablePacket *p_out = 0;	// make the packet writable, to be sent to the network
+        p_out = p->uniqueify();
+		if (!p_out) {
+            return;
+        }
 		
-				// Wifi encapsulation
-				struct click_wifi *w_out = (struct click_wifi *) p_out->data();
+		// Wifi encapsulation
+		struct click_wifi *w_out = (struct click_wifi *) p_out->data();
+		memset(p_out->data(), 0, sizeof(click_wifi));
+		w_out->i_fc[0] = (uint8_t) (WIFI_FC0_VERSION_0 | WIFI_FC0_TYPE_DATA);
+		w_out->i_fc[1] = 0;
+		w_out->i_fc[1] |= (uint8_t) (WIFI_FC1_DIR_MASK & WIFI_FC1_DIR_FROMDS);
+			
+		// modify the MAC address fields of the Wi-Fi frame
+		OdinStationState oss = _sta_mapping_table.get (dst);
+		memcpy(w_out->i_addr1, dst.data(), 6);
+		memcpy(w_out->i_addr2, oss._vap_bssid.data(), 6);
+		memcpy(w_out->i_addr3, src.data(), 6);
 
-				memset(p_out->data(), 0, sizeof(click_wifi));
-				w_out->i_fc[0] = (uint8_t) (WIFI_FC0_VERSION_0 | WIFI_FC0_TYPE_DATA);
-				w_out->i_fc[1] = 0;
-				w_out->i_fc[1] |= (uint8_t) (WIFI_FC1_DIR_MASK & WIFI_FC1_DIR_FROMDS);
-				
-				// modify the MAC address fields of the Wi-Fi frame
-				OdinStationState oss = _sta_mapping_table.get (dst);
-				memcpy(w_out->i_addr1, dst.data(), 6);
-				memcpy(w_out->i_addr2, oss._vap_bssid.data(), 6);
-				memcpy(w_out->i_addr3, src.data(), 6);
+		// Update Tx statistics with this packet
+		update_tx_stats(p_out);
 
-				// Update Tx statistics with this packet
-				update_tx_stats(p_out);
-
-				// send the frame by the output number 2
-				output(2).push(p_out);
-				return;
-			}
+		// send the frame by the output number 2
+		output(2).push(p_out);
+		return;
+      }
 
       // There should be a WifiDecap element upstream.
       output(1).push(p);
@@ -1799,6 +1885,18 @@ OdinAgent::push(int port, Packet *p)
 	*****************************************************************************
 	*****************************************************************************/
   else if (port == 2) { // if port == 2, packet is coming from the lower layer (from scanning device)
+      
+    if (p->length() < sizeof(struct click_wifi)) {
+      p->kill();
+      return;
+    }  
+    struct click_wifi *w = (struct click_wifi *) p->data();
+
+    EtherAddress src = EtherAddress(w->i_addr2);
+    // Stats_to_file
+    if (_capture_mode == 1 && (( src == _capture_mac ) || (_capture_mac_str.equals("FF:FF:FF:FF:FF:FF")))) {
+        stats_to_file(p,"mon1power.txt");
+    }  
 	if (_active_client_scanning == 1) {
 
 		//fprintf(stderr, "[Odinagent.cc] ########### Scanning packets: Scanning activated \n");
@@ -2367,10 +2465,13 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
         }
       break;
     }
-    case handler_channel: {
+    case handler_channel: { 
       int channel;
       int frequency;
       StringAccum sa;
+      EtherAddress sta_mac; // From _sta_mapping_table
+      EtherAddress vap_bssid; // From _sta_mapping_table
+      
       if (Args(agent, errh).push_back_words(str)
         .read_mp("CHANNEL", channel)
         .complete() < 0)
@@ -2378,12 +2479,57 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
           return -1;
         }
       frequency = agent->convert_channel_to_frequency(channel);
-      agent->_channel = channel;
-			if (agent->_debug_level % 10 > 0)
-				fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
-      sa << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency;
-      system(sa.c_str()); // Set channel to wlan0
-      system("sleep 2 && iw dev wlan0 info &");
+      if (agent->_channel != channel) { //FIXME Two options, no STAs or yes, we have to warn them about channel switching
+          
+          if(agent->_sta_mapping_table.size() != 0) { // There is one or more STA in the AP
+            agent->_new_channel = channel;
+            if (agent->_debug_level % 10 > 0)
+              fprintf(stderr, "[Odinagent.cc] #################### Setting csa and new channel %i\n", channel);
+            
+            for (HashTable<EtherAddress, OdinStationState>::iterator it
+              = agent->_sta_mapping_table.begin(); it.live(); it++) // Loop for add CSA to all STA
+            {
+                agent->_csa_table.set(it.key(), agent->_count_csa_beacon_default); // Initialize CSA for that STA
+            }
+            
+            for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA n times
+              for (HashTable<EtherAddress, OdinStationState>::iterator it
+                = agent->_sta_mapping_table.begin(); it.live(); it++) // Loop for sending CSAs to all STA
+              {
+                // assign ssidList from _sta_mapping_table
+                Vector<String> ssidList;
+                ssidList = it.value()._vap_ssids;
+                for (Vector<String>::const_iterator it_ssid = ssidList.begin();
+                  it_ssid != ssidList.end(); it_ssid++) {
+                  agent->send_beacon (it.key(), it.value()._vap_bssid, *it_ssid, false);
+                }
+              }          
+            }
+          }
+          
+          sa << "hostapd_cli -i wlan0 chan_switch " << agent->_count_csa_beacon_default << " " << frequency << " > /dev/null";
+          agent->_channel = channel;
+          if (agent->_debug_level % 10 > 0)
+            fprintf(stderr, "[Odinagent.cc] ########### Changing AP to channel %i\n", channel);
+          system(sa.c_str()); // Set channel in wlan0
+          // Send beacons for help after change of channel
+          for (int j = 1; j <= agent->_burst_after_addlvap; j++) { // Burst after channel change
+              for (HashTable<EtherAddress, OdinStationState>::iterator it
+                = agent->_sta_mapping_table.begin(); it.live(); it++)
+              {
+                // assign ssidList from _sta_mapping_table
+                Vector<String> ssidList;
+                ssidList = it.value()._vap_ssids;
+                for (Vector<String>::const_iterator it_ssid = ssidList.begin();
+                  it_ssid != ssidList.end(); it_ssid++) {
+                  agent->send_beacon (it.key(), it.value()._vap_bssid, *it_ssid, true);
+                }
+              } 
+          }
+      }else{
+        if (agent->_debug_level % 10 > 0)
+          fprintf(stderr, "[Odinagent.cc] ########### AP already in channel %i\n", channel);
+      }
       break;
     }
     case handler_interval: {
@@ -2579,8 +2725,9 @@ OdinAgent::write_handler(const String &str, Element *e, void *user_data, ErrorHa
         ssidList.push_back(vap_ssid);
       }
       
-      agent->_new_channel = new_channel;//How to put the channel into new_channel?
-      agent->_csa = true;
+      agent->_new_channel = new_channel;
+      
+      agent->_csa_table.set(sta_mac, agent->_count_csa_beacon_default); // Initialize CSA for that STA
       
       for (int i = agent->_count_csa_beacon_default; i >= 0; i--){// Sending the CSA n times
     	  //if (agent->_debug_level % 10 > 0)
